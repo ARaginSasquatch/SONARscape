@@ -12,17 +12,17 @@
 <body class="bg-gray-100 font-sans">
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     // Game State
     const initialState = {
       teams: {
-        Trident: { xp: 0, points: 0, tilesCleared: 0, position: 'A1', health: 20, weaponsLevel: 0, detectionLevel: 0, stealthLevel: 0, stealthPoints: 0 },
-        Harpoon: { xp: 0, points: 0, tilesCleared: 0, position: 'E4', health: 20, weaponsLevel: 0, detectionLevel: 0, stealthLevel: 0, stealthPoints: 0 }
+        Trident: { xp: 0, points: 0, tilesCleared: 0, position: 'A1', health: 20, weaponsLevel: 0, detectionLevel: 0, stealthLevel: 0, stealthPoints: 0, moveLog: [], lastMove: null, lastPosition: 'A1', enemyPosition: null },
+        Harpoon: { xp: 0, points: 0, tilesCleared: 0, position: 'E4', health: 20, weaponsLevel: 0, detectionLevel: 0, stealthLevel: Gabrielle's Song
       },
       tasks: [],
       players: {},
-      timer: { minutes: 10, seconds: 0, phase: 'Planning' },
+      timer: { minutes: 10, seconds: 0 },
       messages: []
     };
 
@@ -63,23 +63,21 @@
       const [isLeader, setIsLeader] = useState(true);
       const [playerId, setPlayerId] = useState('Player1');
 
-      // Timer Logic
+      // Timer Logic (Execution only)
       useEffect(() => {
         const interval = setInterval(() => {
           setState(prev => {
-            let { minutes, seconds, phase } = prev.timer;
+            let { minutes, seconds } = prev.timer;
             seconds--;
             if (seconds < 0) {
               seconds = 59;
               minutes--;
             }
-            if (minutes === 8 && seconds === 0) phase = 'Execution';
             if (minutes === 0 && seconds === 0) {
               minutes = 10;
               seconds = 0;
-              phase = 'Planning';
             }
-            return { ...prev, timer: { minutes, seconds, phase } };
+            return { ...prev, timer: { minutes, seconds } };
           });
         }, 1000);
         return () => clearInterval(interval);
@@ -101,21 +99,30 @@
         setState(prev => ({ ...prev, messages: [...prev.messages, { team, role, playerId, message, time: new Date().toLocaleTimeString() }] }));
       };
 
+      // Error Boundary
+      class ErrorBoundary extends React.Component {
+        state = { hasError: false };
+        static getDerivedStateFromError() { return { hasError: true }; }
+        render() {
+          if (this.state.hasError) return <h1>Something went wrong. Refresh the page.</h1>;
+          return this.props.children;
+        }
+      }
+
       // Role Selector
       const RoleSelector = () => (
-        <div className="p-4 bg-white rounded shadow mb-4">
+        <div className="p-4 bg-white rounded shadow mb-4 relative z-50">
           <h2 className="text-xl font-bold mb-2">Select Role</h2>
           <div className="flex space-x-4">
-            <select className="p-2 border rounded" value={team} onChange={(e) => setTeam(e.target.value)}>
+            <select className="p-2 border rounded z-50" value={team} onChange={(e) => setTeam(e.target.value)}>
               <option>Trident</option>
               <option>Harpoon</option>
             </select>
-            <select className="p-2 border rounded" value={role} onChange={(e) => setRole(e.target.value)}>
+            <select className="p-2 border rounded z-50" value={role} onChange={(e) => setRole(e.target.value)}>
               <option>Captain</option>
               <option>Weapons</option>
               <option>Detection</option>
-              <option>Engineer</option>
-              <option>Navigator</option>
+              <option>Systems</option>
             </select>
             <input
               type="text"
@@ -136,7 +143,7 @@
       const TimerDisplay = () => (
         <div className="p-4 bg-white rounded shadow mb-4">
           <h2 className="text-xl font-bold">Timer</h2>
-          <p>{state.timer.phase}: {state.timer.minutes}:{state.timer.seconds < 10 ? '0' : ''}{state.timer.seconds}</p>
+          <p>{state.timer.minutes}:{state.timer.seconds < 10 ? '0' : ''}{state.timer.seconds}</p>
         </div>
       );
 
@@ -178,25 +185,84 @@
 
       // Captain Dashboard
       function CaptainDashboard() {
-        const move = (direction) => {
-          if (!isLeader || state.timer.phase !== 'Execution') return;
+        const canvasRef = useRef(null);
+
+        useEffect(() => {
+          const canvas = canvasRef.current;
+          const ctx = canvas.getContext('2d');
+          const cellSize = 80;
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+          // Draw grid
+          ctx.strokeStyle = '#000';
+          ctx.fillStyle = '#1e3a8a';
+          ctx.fillRect(0, 0, 5 * cellSize, 5 * cellSize);
+          for (let i = 0; i <= 5; i++) {
+            ctx.beginPath();
+            ctx.moveTo(i * cellSize, 0);
+            ctx.lineTo(i * cellSize, 5 * cellSize);
+            ctx.moveTo(0, i * cellSize);
+            ctx.lineTo(5 * cellSize, i * cellSize);
+            ctx.stroke();
+          }
+
+          // Draw tile names and status
+          Object.keys(tiles).forEach(tile => {
+            const row = tile.charCodeAt(0) - 65;
+            const col = parseInt(tile[1]) - 1;
+            ctx.fillStyle = tiles[tile].status === 'Cleared' ? '#22c55e' : '#1e3a8a';
+            ctx.fillRect(col * cellSize + 1, row * cellSize + 1, cellSize - 2, cellSize - 2);
+            ctx.fillStyle = '#fff';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(tiles[tile].name, col * cellSize + cellSize / 2, row * cellSize + cellSize / 2);
+            ctx.fillText(tile, col * cellSize + cellSize / 2, row * cellSize + 20);
+          });
+
+          // Draw path
+          ctx.strokeStyle = team === 'Trident' ? '#3b82f6' : '#ef4444';
+          ctx.lineWidth = 3;
+          ctx.beginPath();
+          state.teams[team].moveLog.forEach((move, idx) => {
+            const [row, col] = [move.tile.charCodeAt(0) - 65, parseInt(move.tile[1]) - 1];
+            if (idx === 0) ctx.moveTo(col * cellSize + cellSize / 2, row * cellSize + cellSize / 2);
+            else ctx.lineTo(col * cellSize + cellSize / 2, row * cellSize + cellSize / 2);
+          });
+          ctx.stroke();
+
+          // Highlight current position
+          const [currentRow, currentCol] = [state.teams[team].position.charCodeAt(0) - 65, parseInt(state.teams[team].position[1]) - 1];
+          ctx.fillStyle = team === 'Trident' ? 'rgba(59, 130, 246, 0.5)' : 'rgba(239, 68, 68, 0.5)';
+          ctx.fillRect(currentCol * cellSize + 1, currentRow * cellSize + 1, cellSize - 2, cellSize - 2);
+
+          // Highlight enemy position (if scanned)
+          if (state.teams[team].enemyPosition) {
+            const [enemyRow, enemyCol] = [state.teams[team].enemyPosition.charCodeAt(0) - 65, parseInt(state.teams[team].enemyPosition[1]) - 1];
+            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
+            ctx.lineWidth = 5;
+            ctx.strokeRect(enemyCol * cellSize + 3, enemyRow * cellSize + 3, cellSize - 6, cellSize - 6);
+          }
+        }, [state.teams[team].position, state.teams[team].moveLog, state.teams[team].enemyPosition]);
+
+        const move = (tile) => {
+          if (!isLeader) return;
           const currentTile = state.teams[team].position;
-          const [row, col] = [currentTile[0], parseInt(currentTile[1])];
-          let newTile;
-          if (direction === 'N' && row !== 'A') newTile = String.fromCharCode(row.charCodeAt(0) - 1) + col;
-          if (direction === 'S' && row !== 'E') newTile = String.fromCharCode(row.charCodeAt(0) + 1) + col;
-          if (direction === 'E' && col !== 5) newTile = row + (col + 1);
-          if (direction === 'W' && col !== 1) newTile = row + (col - 1);
-          if (!newTile || tiles[newTile].status === 'Cleared') return;
+          const [currentRow, currentCol] = [currentTile.charCodeAt(0) - 65, parseInt(currentTile[1])];
+          const [newRow, newCol] = [tile.charCodeAt(0) - 65, parseInt(tile[1])];
+          if (Math.abs(newRow - currentRow) + Math.abs(newCol - currentCol) !== 1 || tiles[tile].status === 'Cleared') {
+            addMessage('Invalid move: Must be adjacent and not cleared.');
+            return;
+          }
 
           let xpCost = 20000;
           const lastMove = state.teams[team].lastMove;
-          if (lastMove === direction) xpCost -= 5000; // Bonus for same direction
+          const direction = newRow < currentRow ? 'N' : newRow > currentRow ? 'S' : newCol > currentCol ? 'E' : 'W';
+          if (lastMove === direction) xpCost -= 5000;
 
           if (state.teams[team].xp >= xpCost) {
             const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
-            if (state.teams[otherTeam].position === newTile) {
-              addMessage(`Conflict at ${newTile}! Waiting for Stop! resolution.`);
+            if (state.teams[otherTeam].position === tile) {
+              addMessage(`Conflict at ${tile}! Use Stop! to resolve.`);
               return;
             }
             setState(prev => ({
@@ -205,21 +271,22 @@
                 ...prev.teams,
                 [team]: {
                   ...prev.teams[team],
-                  position: newTile,
+                  position: tile,
                   xp: prev.teams[team].xp - xpCost,
                   lastMove: direction,
-                  lastPosition: currentTile
+                  lastPosition: currentTile,
+                  moveLog: [...prev.teams[team].moveLog, { tile, direction, xp: xpCost, time: new Date().toLocaleTimeString() }]
                 }
               }
             }));
-            addMessage(`Moved to ${tiles[newTile].name} (${xpCost} XP)`);
+            addMessage(`Moved ${direction} to ${tiles[tile].name} (${xpCost} XP)`);
           } else {
             addMessage('Not enough XP to move!');
           }
         };
 
         const stop = () => {
-          if (!isLeader || state.timer.phase !== 'Execution') return;
+          if (!isLeader) return;
           const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
           const currentTile = state.teams[team].position;
           if (state.teams[otherTeam].position === currentTile) {
@@ -255,43 +322,54 @@
         return (
           <div className="p-4 bg-white rounded shadow">
             <h2 className="text-xl font-bold mb-4">Captains Dashboard</h2>
-            <div className="grid grid-cols-5 gap-1 mb-4">
-              {['A', 'B', 'C', 'D', 'E'].map(row => (
-                [1, 2, 3, 4, 5].map(col => {
-                  const tile = `${row}${col}`;
-                  const isCurrent = state.teams[team].position === tile;
-                  const isCleared = tiles[tile]?.status === 'Cleared';
-                  return (
-                    <div
-                      key={tile}
-                      className={`p-2 text-center border ${isCurrent ? 'bg-blue-500 text-white' : isCleared ? 'bg-green-500' : 'bg-gray-200'} ${tiles[tile] ? 'cursor-pointer' : ''}`}
-                    >
-                      {tiles[tile]?.name || ''}
-                    </div>
-                  );
-                })
-              ))}
-            </div>
+            <canvas ref={canvasRef} width={400} height={400} className="mb-4 border" onClick={(e) => {
+              if (!isLeader) return;
+              const rect = canvasRef.current.getBoundingClientRect();
+              const x = e.clientX - rect.left;
+              const y = e.clientY - rect.top;
+              const cellSize = 80;
+              const col = Math.floor(x / cellSize) + 1;
+              const row = String.fromCharCode(65 + Math.floor(y / cellSize));
+              const tile = `${row}${col}`;
+              if (tiles[tile]) move(tile);
+            }} />
             <div className="flex space-x-2 mb-4">
               {isLeader && (
-                <>
-                  <button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={() => move('N')}>North</button>
-                  <button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={() => move('S')}>South</button>
-                  <button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={() => move('E')}>East</button>
-                  <button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={() => move('W')}>West</button>
-                  <button className="px-4 py-2 bg-red-500 text-white rounded" onClick={stop}>Stop!</button>
-                </>
+                <button className="px-4 py-2 bg-red-500 text-white rounded" onClick={stop}>Stop!</button>
               )}
               {!isLeader && (
                 <>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('N')}>Suggest North</button>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('S')}>Suggest South</button>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('E')}>Suggest East</button>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('W')}>Suggest West</button>
+                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('North')}>Suggest North</button>
+                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('South')}>Suggest South</button>
+                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('East')}>Suggest East</button>
+                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('West')}>Suggest West</button>
                 </>
               )}
             </div>
             <p>Team XP: {state.teams[team].xp}</p>
+            <h3 className="text-lg font-semibold mt-4">Move Log</h3>
+            <div className="h-40 overflow-y-scroll border">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-200">
+                    <th className="p-2">Direction</th>
+                    <th className="p-2">Tile</th>
+                    <th className="p-2">XP</th>
+                    <th className="p-2">Time</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {state.teams[team].moveLog.map((move, idx) => (
+                    <tr key={idx} className="border-b">
+                      <td className="p-2">{move.direction}</td>
+                      <td className="p-2">{tiles[move.tile].name}</td>
+                      <td className="p-2">{move.xp}</td>
+                      <td className="p-2">{move.time}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
         );
       }
@@ -299,7 +377,7 @@
       // Weapons Officer Dashboard
       function WeaponsOfficerDashboard() {
         const assignTask = (task, member) => {
-          if (!isLeader || state.timer.phase !== 'Planning') return;
+          if (!isLeader) return;
           if (state.tasks.filter(t => t.team === team && t.tile === task.tile && t.role === 'Weapons').length >= task.cap) {
             addMessage(`Task cap reached for ${task.tile}`);
             return;
@@ -312,7 +390,7 @@
         };
 
         const completeTask = (task) => {
-          if (isLeader || state.timer.phase !== 'Execution' || task.member !== playerId) return;
+          if (isLeader || task.member !== playerId) return;
           setState(prev => {
             const newTasks = prev.tasks.map(t => t.task === task.task && t.member === playerId ? { ...t, status: 'Completed' } : t);
             const teamState = prev.teams[team];
@@ -321,26 +399,20 @@
             const newXP = teamState.xp + task.xp;
             const tilePoints = newTasks.filter(t => t.team === team && t.tile === task.tile && t.status === 'Completed').reduce((sum, t) => sum + t.points, 0);
             const tilesCleared = tilePoints >= tiles[task.tile].points ? teamState.tilesCleared + 1 : teamState.tilesCleared;
-            const newTileStatus = tilePoints >= tiles[task.tile].points ? { ...tiles, [task.tile]: { ...tiles[task.tile], status: 'Cleared' } } : tiles;
-            return {
+            const newTileStatus = tilePoints >= tiles[task.tile].points ? { ...tiles, [task.tile]: { ...tiles[task.tile], status: 'Cleared' } }PresetState(prev => ({
               ...prev,
               tasks: newTasks,
               teams: {
                 ...prev.teams,
-                [team]: { ...teamState, points: newPoints, xp: newXP, tilesCleared, weaponsLevel: Math.min(10, Math.floor(newXP / 10000)) }
+                [team]: { ...teamState, points: newPoints, xp: newXP, tilesCleared }
               },
               players: {
                 ...prev.players,
                 [playerId]: { ...prev.players[playerId], points: (prev.players[playerId]?.points || 0) + points }
               }
-            };
+            }));
+            addMessage(`${task.task} completed by ${playerId}`);
           });
-          addMessage(`${task.task} completed by ${playerId}`);
-        };
-
-        const activateWeapons = () => {
-          if (!isLeader || state.timer.phase !== 'Execution') return;
-          addMessage('Weapons System Activated');
         };
 
         return (
@@ -379,7 +451,7 @@
             {isLeader && (
               <div className="mb-4">
                 <h3 className="text-lg font-semibold">Assign Task</h3>
-                <select className="p-2 border rounded mr-2" onChange={(e) => {
+                <select className="p-2 border rounded mr-2 z-50" onChange={(e) => {
                   const task = taskList.find(t => t.task === e.target.value && t.type === 'boss');
                   if (task) assignTask(task, `Player${Math.floor(Math.random() * 15) + 1}`);
                 }}>
@@ -388,7 +460,6 @@
                     <option key={t.task} value={t.task}>{t.task} ({t.tile})</option>
                   ))}
                 </select>
-                <button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={activateWeapons}>Activate Weapons</button>
               </div>
             )}
           </div>
@@ -398,7 +469,7 @@
       // Detection Officer Dashboard
       function DetectionOfficerDashboard() {
         const assignTask = (task, member) => {
-          if (!isLeader || state.timer.phase !== 'Planning') return;
+          if (!isLeader) return;
           if (state.tasks.filter(t => t.team === team && t.tile === task.tile && t.role === 'Detection').length >= task.cap) {
             addMessage(`Task cap reached for ${task.tile}`);
             return;
@@ -411,7 +482,7 @@
         };
 
         const completeTask = (task) => {
-          if (isLeader || state.timer.phase !== 'Execution' || task.member !== playerId) return;
+          if (isLeader || task.member !== playerId) return;
           setState(prev => {
             const newTasks = prev.tasks.map(t => t.task === task.task && t.member === playerId ? { ...t, status: 'Completed' } : t);
             const teamState = prev.teams[team];
@@ -426,7 +497,7 @@
               tasks: newTasks,
               teams: {
                 ...prev.teams,
-                [team]: { ...teamState, points: newPoints, xp: newXP, tilesCleared, detectionLevel: Math.min(10, Math.floor(newXP / 10000)) }
+                [team]: { ...teamState, points: newPoints, xp: newXP, tilesCleared }
               },
               players: {
                 ...prev.players,
@@ -438,26 +509,23 @@
         };
 
         const scan = () => {
-          if (!isLeader || state.timer.phase !== 'Execution') return;
+          if (!isLeader) return;
           const scanCost = state.teams[team].detectionLevel >= 8 ? 2000 : state.teams[team].detectionLevel >= 5 ? 5000 : 10000;
-          if (state.teams[team].xp >= scanCost) {
+          const stealthReduction = state.teams[team].stealthLevel >= 8 ? 5000 : state.teams[team].stealthLevel >= 5 ? 3000 : 0;
+          const finalCost = Math.max(0, scanCost - stealthReduction);
+          if (state.teams[team].xp >= finalCost) {
             const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
             setState(prev => ({
               ...prev,
               teams: {
                 ...prev.teams,
-                [team]: { ...prev.teams[team], xp: prev.teams[team].xp - scanCost }
+                [team]: { ...prev.teams[team], xp: prev.teams[team].xp - finalCost, enemyPosition: prev.teams[otherTeam].position }
               }
             }));
-            addMessage(`Scanned ${otherTeam} at ${tiles[state.teams[otherTeam].position].name}`);
+            addMessage(`Scanned ${otherTeam} at ${tiles[state.teams[otherTeam].position].name} (${finalCost} XP)`);
           } else {
             addMessage('Not enough XP to scan!');
           }
-        };
-
-        const activateDetection = () => {
-          if (!isLeader || state.timer.phase !== 'Execution') return;
-          addMessage('Detection System Activated');
         };
 
         return (
@@ -496,7 +564,7 @@
             {isLeader && (
               <div className="mb-4">
                 <h3 className="text-lg font-semibold">Assign Task</h3>
-                <select className="p-2 border rounded mr-2" onChange={(e) => {
+                <select className="p-2 border rounded mr-2 z-50" onChange={(e) => {
                   const task = taskList.find(t => t.task === e.target.value && t.type === 'non-boss');
                   if (task) assignTask(task, `Player${Math.floor(Math.random() * 15) + 1}`);
                 }}>
@@ -506,17 +574,81 @@
                   ))}
                 </select>
                 <button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={scan}>Scan</button>
-                <button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={activateDetection}>Activate Detection</button>
               </div>
             )}
           </div>
         );
       }
 
-      // Engineer Dashboard
-      function EngineerDashboard() {
+      // Systems Management Dashboard
+      function SystemsManagementDashboard() {
+        const [selectedDrop, setSelectedDrop] = useState('');
+        const [manualXP, setManualXP] = useState('');
+        const [systemToIncrement, setSystemToIncrement] = useState('Weapons');
+
+        const submitXPandDrop = () => {
+          if (!isLeader) return;
+          let xp = parseInt(manualXP) || 0;
+          let points = 0;
+          let stealthPoints = 0;
+          const drop = taskList.find(t => t.task === selectedDrop);
+
+          if (drop) {
+            xp += drop.xp;
+            points = drop.points;
+            if (drop.tile === 'Callisto' || drop.tile === 'Venenatis') {
+              stealthPoints = 1;
+            }
+          }
+
+          if (xp <= 0 && !drop) {
+            addMessage('Invalid XP or drop selection.');
+            return;
+          }
+
+          setState(prev => {
+            const teamState = prev.teams[team];
+            const newXP = teamState.xp + xp;
+            const newPoints = teamState.points + points;
+            const newStealthPoints = teamState.stealthPoints + stealthPoints;
+            let newWeaponsLevel = teamState.weaponsLevel;
+            let newDetectionLevel = teamState.detectionLevel;
+            let newStealthLevel = teamState.stealthLevel;
+
+            if (newXP >= teamState.xp + 10000) {
+              if (systemToIncrement === 'Weapons') newWeaponsLevel = Math.min(10, newWeaponsLevel + 1);
+              else if (systemToIncrement === 'Detection') newDetectionLevel = Math.min(10, newDetectionLevel + 1);
+              else if (systemToIncrement === 'Stealth') newStealthLevel = Math.min(10, newStealthLevel + 1);
+            }
+
+            return {
+              ...prev,
+              teams: {
+                ...prev.teams,
+                [team]: {
+                  ...teamState,
+                  xp: newXP,
+                  points: newPoints,
+                  stealthPoints: newStealthPoints,
+                  weaponsLevel: newWeaponsLevel,
+                  detectionLevel: newDetectionLevel,
+                  stealthLevel: newStealthLevel
+                }
+              },
+              players: {
+                ...prev.players,
+                [playerId]: { ...prev.players[playerId], points: (prev.players[playerId]?.points || 0) + points }
+              }
+            };
+          });
+
+          addMessage(`Added ${xp} XP, ${points} points, ${stealthPoints} stealth points. System: ${systemToIncrement}`);
+          setSelectedDrop('');
+          setManualXP('');
+        };
+
         const logPenalty = () => {
-          if (!isLeader || state.timer.phase !== 'Execution') return;
+          if (!isLeader) return;
           setState(prev => {
             const newHealth = Math.max(0, prev.teams[team].health - 1);
             let newTeams = { ...prev.teams, [team]: { ...prev.teams[team], health: newHealth } };
@@ -537,14 +669,14 @@
           });
         };
 
-        const suggestPenalty = () => {
+        const suggestAction = () => {
           if (isLeader) return;
-          addMessage(`Suggested penalty for ${team}`);
+          addMessage(`Suggested system action by ${playerId}`);
         };
 
         return (
           <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Engineers Dashboard</h2>
+            <h2 className="text-xl font-bold mb-4">Systems Management Dashboard</h2>
             <table className="w-full mb-4 border">
               <thead>
                 <tr className="bg-gray-200">
@@ -552,7 +684,8 @@
                   <th className="p-2">Weapons Level</th>
                   <th className="p-2">Detection Level</th>
                   <th className="p-2">Stealth Level</th>
-                  <th className="p-2">XP Total</th>
+                  <th className="p-2">Stealth Points</th>
+                  <th className="p-2">Total XP</th>
                 </tr>
               </thead>
               <tbody>
@@ -561,57 +694,71 @@
                   <td className="p-2">{state.teams[team].weaponsLevel}</td>
                   <td className="p-2">{state.teams[team].detectionLevel}</td>
                   <td className="p-2">{state.teams[team].stealthLevel}</td>
+                  <td className="p-2">{state.teams[team].stealthPoints}</td>
                   <td className="p-2">{state.teams[team].xp}</td>
                 </tr>
               </tbody>
             </table>
             {isLeader && (
-              <button className="px-4 py-2 bg-red-500 text-white rounded" onClick={logPenalty}>Log Penalty</button>
+              <div className="mb-4">
+                <h3 className="text-lg font-semibold">Input XP and Drops</h3>
+                <div className="flex space-x-4 mb-2">
+                  <select
+                    className="p-2 border rounded z-50"
+                    value={selectedDrop}
+                    onChange={(e) => setSelectedDrop(e.target.value)}
+                  >
+                    <option value="">Select Drop</option>
+                    {taskList.map(t => (
+                      <option key={t.task} value={t.task}>{t.task} ({t.tile})</option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    className="p-2 border rounded"
+                    value={manualXP}
+                    onChange={(e) => setManualXP(e.target.value)}
+                    placeholder="Manual XP"
+                  />
+                  <select
+                    className="p-2 border rounded z-50"
+                    value={systemToIncrement}
+                    onChange={(e) => setSystemToIncrement(e.target.value)}
+                  >
+                    <option>Weapons</option>
+                    <option>Detection</option>
+                    <option>Stealth</option>
+                  </select>
+                  <button
+                    className="px-4 py-2 bg-blue-500 text-white rounded"
+                    onClick={submitXPandDrop}
+                  >
+                    Submit
+                  </button>
+                </div>
+                <button
+                  className="px-4 py-2 bg-red-500 text-white rounded mr-2"
+                  onClick={logPenalty}
+                >
+                  Log Penalty
+                </button>
+                {state.teams[team].health === 0 && (
+                  <button
+                    className="px-4 py-2 bg-yellow-500 text-white rounded"
+                    onClick={() => logPenalty()}
+                  >
+                    Initiate Repair
+                  </button>
+                )}
+              </div>
             )}
             {!isLeader && (
-              <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={suggestPenalty}>Suggest Penalty</button>
-            )}
-          </div>
-        );
-      }
-
-      // Navigator Dashboard
-      function NavigatorDashboard() {
-        const spendStealthPoint = () => {
-          if (!isLeader || state.timer.phase !== 'Execution' || state.teams[team].stealthPoints === 0) return;
-          setState(prev => ({
-            ...prev,
-            teams: {
-              ...prev.teams,
-              [team]: { ...prev.teams[team], stealthPoints: prev.teams[team].stealthPoints - 1 }
-            }
-          }));
-          addMessage(`Spent 1 stealth point. Scan cost reduced.`);
-        };
-
-        const suggestUsage = () => {
-          if (isLeader) return;
-          addMessage(`Suggested stealth point usage for ${team}`);
-        };
-
-        const activateStealth = () => {
-          if (!isLeader || state.timer.phase !== 'Execution') return;
-          addMessage('Stealth System Activated');
-        };
-
-        return (
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Navigators Dashboard</h2>
-            <p>Stealth Points: {state.teams[team].stealthPoints}</p>
-            <p>Scan Cost Reduction: {state.teams[team].stealthLevel >= 8 ? 5000 : state.teams[team].stealthLevel >= 5 ? 3000 : 0} XP</p>
-            {isLeader && (
-              <>
-                <button className="px-4 py-2 bg-blue-500 text-white rounded mt-2" onClick={spendStealthPoint}>Spend Stealth Point</button>
-                <button className="px-4 py-2 bg-blue-500 text-white rounded mt-2" onClick={activateStealth}>Activate Stealth</button>
-              </>
-            )}
-            {!isLeader && (
-              <button className="px-4 py-2 bg-gray-500 text-white rounded mt-2" onClick={suggestUsage}>Suggest Usage</button>
+              <button
+                className="px-4 py-2 bg-gray-500 text-white rounded"
+                onClick={suggestAction}
+              >
+                Suggest Action
+              </button>
             )}
           </div>
         );
@@ -623,8 +770,7 @@
           case 'Captain': return <CaptainDashboard />;
           case 'Weapons': return <WeaponsOfficerDashboard />;
           case 'Detection': return <DetectionOfficerDashboard />;
-          case 'Engineer': return <EngineerDashboard />;
-          case 'Navigator': return <NavigatorDashboard />;
+          case 'Systems': return <SystemsManagementDashboard />;
           default: return null;
         }
       };
@@ -632,23 +778,30 @@
       console.log('Rendering App...'); // Debug log
 
       return (
-        <div className="container mx-auto p-4">
-          <h1 className="text-3xl font-bold mb-4">SONARScape Role Interface</h1>
-          <RoleSelector />
-          <TimerDisplay />
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>{renderDashboard()}</div>
-            <div>
-              <ChatBox />
-              <Scoreboard />
+        <ErrorBoundary>
+          <div className="container mx-auto p-4">
+            <h1 className="text-3xl font-bold mb-4">SONARScape Role Interface</h1>
+            <RoleSelector />
+            <TimerDisplay />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>{renderDashboard()}</div>
+              <div>
+                <ChatBox />
+                <Scoreboard />
+              </div>
             </div>
           </div>
-        </div>
+        </ErrorBoundary>
       );
     }
 
     // Render App
-    ReactDOM.render(<App />, document.getElementById('root'));
+    try {
+      ReactDOM.render(<App />, document.getElementById('root'));
+      console.log('App rendered successfully');
+    } catch (error) {
+      console.error('Failed to render App:', error);
+    }
   </script>
 </body>
 </html>

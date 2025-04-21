@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SONARScape: Captain Sonar Interface</title>
+  <title>SONARScape: Team A Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
@@ -14,9 +14,13 @@
   <script type="text/babel">
     const { useState, useEffect, useReducer } = React;
 
-    // Shared chat state
-    const initialChatMessages = [];
-    let sharedChatMessages = initialChatMessages;
+    // Persistent shared game state
+    const initialSharedState = {
+      teamA: { position: { x: 7, y: 7 }, damage: 0 },
+      teamB: { position: { x: 7, y: 7 }, damage: 0 },
+      chatMessages: []
+    };
+    window.sharedState = window.sharedState || { ...initialSharedState };
 
     // Game state reducer
     const initialGameState = {
@@ -24,10 +28,17 @@
       path: [{ x: 7, y: 7 }],
       mines: [],
       systems: { torpedo: 0, mine: 0, drone: 0, sonar: 0, silence: 0 },
-      breakdowns: { north: [false, false, false, false], south: [false, false, false, false], east: [false, false, false, false], west: [false, false, false, false], green: [false, false], orange: [false, false] },
+      breakdowns: {
+        north: [false, false, false, false],
+        south: [false, false, false, false],
+        east: [false, false, false, false],
+        west: [false, false, false, false],
+        green: [false, false],
+        orange: [false, false]
+      },
       isSurfacing: false,
-      damage: 0,
-      sector: 5
+      sector: 5,
+      selectedSystem: 'torpedo'
     };
 
     const systemsConfig = {
@@ -42,7 +53,64 @@
       1: 'north', 2: 'south', 3: 'east', 4: 'west', 5: 'green', 6: 'orange', 7: 'north', 8: 'south', 9: 'east'
     };
 
+    // Generate islands once
+    const generateIslands = () => {
+      const gridSize = 15;
+      const shapes = [
+        [[0,0]], // Single cell
+        [[0,0], [0,1]], // 2-cell vertical
+        [[0,0], [1,0]], // 2-cell horizontal
+        [[0,0], [0,1], [1,0]], // L-shape
+        [[0,0], [0,1], [1,0], [1,1]], // 2x2 square
+        [[0,0], [0,1], [0,2]], // 3-cell vertical
+        [[0,0], [1,0], [2,0]], // 3-cell horizontal
+        [[0,0], [0,1], [1,0], [0,-1]], // Cross
+      ];
+      const islands = [];
+      const numIslands = Math.floor(Math.random() * 4) + 5; // 5–8 islands
+      const occupied = new Set(['7,7']); // Protect starting position
+
+      for (let i = 0; i < numIslands; i++) {
+        let placed = false;
+        let attempts = 0;
+        while (!placed && attempts < 50) {
+          const shape = shapes[Math.floor(Math.random() * shapes.length)];
+          const anchorX = Math.floor(Math.random() * gridSize);
+          const anchorY = Math.floor(Math.random() * gridSize);
+          let valid = true;
+          const cells = [];
+
+          for (const [dx, dy] of shape) {
+            const x = anchorX + dx;
+            const y = anchorY + dy;
+            if (
+              x < 0 || x >= gridSize ||
+              y < 0 || y >= gridSize ||
+              occupied.has(`${x},${y}`)
+            ) {
+              valid = false;
+              break;
+            }
+            cells.push({ x, y });
+          }
+
+          if (valid) {
+            cells.forEach(cell => occupied.add(`${cell.x},${cell.y}`));
+            islands.push(...cells);
+            placed = true;
+          }
+          attempts++;
+        }
+      }
+      return islands;
+    };
+
+    window.islands = window.islands || generateIslands();
+
     const gameReducer = (state, action) => {
+      const gridSize = 15;
+      const islands = window.islands;
+
       switch (action.type) {
         case 'MOVE':
           if (state.isSurfacing) return state;
@@ -53,15 +121,7 @@
           else if (action.direction === 'S') newY++;
           else if (action.direction === 'E') newX++;
           else if (action.direction === 'W') newX--;
-          
-          const gridSize = 15;
-          const islands = [
-            { x: 2, y: 2 }, { x: 2, y: 12 }, { x: 3, y: 7 }, { x: 7, y: 2 },
-            { x: 7, y: 12 }, { x: 11, y: 2 }, { x: 11, y: 12 }, { x: 12, y: 7 },
-            { x: 4, y: 4 }, { x: 4, y: 10 }, { x: 10, y: 4 }, { x: 10, y: 10 },
-            { x: 6, y: 6 }, { x: 8, y: 8 }
-          ];
-          
+
           if (
             newX >= 0 && newX < gridSize &&
             newY >= 0 && newY < gridSize &&
@@ -76,7 +136,8 @@
             const nextFalseIndex = systemBreakdowns.indexOf(false);
             if (nextFalseIndex !== -1) systemBreakdowns[nextFalseIndex] = true;
             breakdowns[system] = systemBreakdowns;
-            
+
+            window.sharedState[action.team] = { ...window.sharedState[action.team], position: newPosition };
             return {
               ...state,
               position: newPosition,
@@ -85,7 +146,7 @@
               breakdowns,
               systems: {
                 ...state.systems,
-                [action.selectedSystem]: Math.min(state.systems[action.selectedSystem] + 1, systemsConfig[action.selectedSystem].max)
+                [state.selectedSystem]: Math.min(state.systems[state.selectedSystem] + 1, systemsConfig[state.selectedSystem].max)
               }
             };
           }
@@ -100,23 +161,105 @@
             ...state,
             path: [state.position],
             isSurfacing: false,
-            breakdowns: { north: [false, false, false, false], south: [false, false, false, false], east: [false, false, false, false], west: [false, false, false, false], green: [false, false], orange: [false, false] }
+            breakdowns: {
+              north: [false, false, false, false],
+              south: [false, false, false, false],
+              east: [false, false, false, false],
+              west: [false, false, false, false],
+              green: [false, false],
+              orange: [false, false]
+            }
           };
 
         case 'USE_SYSTEM':
           if (state.isSurfacing || state.systems[action.system] < systemsConfig[action.system].max) return state;
           let newState = { ...state, systems: { ...state.systems, [action.system]: 0 } };
-          if (action.system === 'mine') {
-            newState.mines = [...state.mines, { ...state.position, id: Date.now() }];
-          } else if (action.system === 'torpedo') {
-            if (action.target && Math.abs(state.position.x - action.target.x) + Math.abs(state.position.y - action.target.y) <= 2) {
-              newState.damage = Math.min(state.damage + (action.target.isDirect ? 2 : 1), 4);
+          const enemyTeam = action.team === 'teamA' ? 'teamB' : 'teamA';
+          const enemyPos = window.sharedState[enemyTeam] && window.sharedState[enemyTeam].position 
+            ? window.sharedState[enemyTeam].position 
+            : { x: 0, y: 0 };
+
+          if (action.system === 'torpedo') {
+            const { x, y } = action.target;
+            if (x >= 0 && x < 15 && y >= 0 && y < 15) {
+              const dist = Math.abs(state.position.x - x) + Math.abs(state.position.y - y);
+              if (dist <= 2) {
+                const isDirect = x === enemyPos.x && y === enemyPos.y;
+                const damage = isDirect ? 2 : (dist === 1 || dist === 2) && (Math.abs(x - enemyPos.x) + Math.abs(y - enemyPos.y) <= 1) ? 1 : 0;
+                if (damage > 0 && window.sharedState[enemyTeam]) {
+                  window.sharedState[enemyTeam] = {
+                    ...window.sharedState[enemyTeam],
+                    damage: Math.min(window.sharedState[enemyTeam].damage + damage, 4)
+                  };
+                }
+                return newState;
+              }
             }
+          } else if (action.system === 'mine') {
+            newState.mines = [...state.mines, { ...state.position, id: Date.now() }];
+            return newState;
+          } else if (action.system === 'drone') {
+            const sector = action.sector;
+            const enemySector = Math.floor(enemyPos.y / 5) * 3 + Math.floor(enemyPos.x / 5) + 1;
+            if (sector === enemySector) {
+              alert('Enemy detected in sector!');
+            } else {
+              alert('No enemy in sector.');
+            }
+            return newState;
+          } else if (action.system === 'sonar') {
+            const choice = Math.random() < 0.33 ? 'row' : Math.random() < 0.5 ? 'column' : 'sector';
+            const value = choice === 'row' ? enemyPos.y : choice === 'column' ? enemyPos.x : Math.floor(enemyPos.y / 5) * 3 + Math.floor(enemyPos.x / 5) + 1;
+            window.sharedState.chatMessages = [...window.sharedState.chatMessages, { text: `${enemyTeam} reveals ${choice}: ${value}`, id: Date.now() }];
+            return newState;
+          } else if (action.system === 'silence') {
+            // Silence: Move 0–4 spaces without announcing to enemy (no chatMessages update)
+            let tempState = { ...state };
+            for (const move of action.moves) {
+              let newX = tempState.position.x;
+              let newY = tempState.position.y;
+              if (move === 'N') newY--;
+              else if (move === 'S') newY++;
+              else if (move === 'E') newX++;
+              else if (move === 'W') newX--;
+              if (
+                newX >= 0 && newX < gridSize &&
+                newY >= 0 && newY < gridSize &&
+                !islands.some(i => i.x === newX && i.y === newY) &&
+                !tempState.path.some(p => p.x === newX && p.y === newY)
+              ) {
+                tempState.position = { x: newX, y: newY };
+                tempState.path = [...tempState.path, { x: newX, y: newY }];
+                window.sharedState[action.team] = { ...window.sharedState[action.team], position: { x: newX, y: newY } };
+              } else {
+                return state; // Invalid move, abort silence
+              }
+            }
+            return { ...tempState, systems: { ...tempState.systems, silence: 0 } };
           }
           return newState;
 
         case 'DETONATE_MINE':
-          return { ...state, mines: state.mines.filter(m => m.id !== action.mineId) };
+          const mine = state.mines.find(m => m.id === action.mineId);
+          if (mine) {
+            const enemyTeam = action.team === 'teamA' ? 'teamB' : 'teamA';
+            const enemyPos = window.sharedState[enemyTeam] && window.sharedState[enemyTeam].position 
+              ? window.sharedState[enemyTeam].position 
+              : { x: 0, y: 0 };
+            const dist = Math.abs(mine.x - enemyPos.x) + Math.abs(mine.y - enemyPos.y);
+            const damage = dist === 0 ? 2 : dist === 1 ? 1 : 0;
+            if (damage > 0 && window.sharedState[enemyTeam]) {
+              window.sharedState[enemyTeam] = {
+                ...window.sharedState[enemyTeam],
+                damage: Math.min(window.sharedState[enemyTeam].damage + damage, 4)
+              };
+            }
+            return { ...state, mines: state.mines.filter(m => m.id !== action.mineId) };
+          }
+          return state;
+
+        case 'SET_SELECTED_SYSTEM':
+          return { ...state, selectedSystem: action.system };
 
         default:
           return state;
@@ -126,16 +269,19 @@
     // ChatBox component
     const ChatBox = () => {
       const [message, setMessage] = useState('');
-      const [messages, setMessages] = useState(sharedChatMessages);
+      const [messages, setMessages] = useState(window.sharedState.chatMessages);
 
       useEffect(() => {
-        setMessages(sharedChatMessages);
+        const interval = setInterval(() => {
+          setMessages([...window.sharedState.chatMessages]);
+        }, 1000);
+        return () => clearInterval(interval);
       }, []);
 
       const sendMessage = () => {
         if (message.trim()) {
-          sharedChatMessages = [...sharedChatMessages, { text: message, id: Date.now() }];
-          setMessages(sharedChatMessages);
+          window.sharedState.chatMessages = [...window.sharedState.chatMessages, { text: message, id: Date.now() }];
+          setMessages([...window.sharedState.chatMessages]);
           setMessage('');
         }
       };
@@ -167,15 +313,10 @@
       );
     };
 
-    // Captain Interface (15x15 grid)
+    // Captain Interface
     const CaptainInterface = ({ team, state, dispatch }) => {
       const gridSize = 15;
-      const islands = [
-        { x: 2, y: 2 }, { x: 2, y: 12 }, { x: 3, y: 7 }, { x: 7, y: 2 },
-        { x: 7, y: 12 }, { x: 11, y: 2 }, { x: 11, y: 12 }, { x: 12, y: 7 },
-        { x: 4, y: 4 }, { x: 4, y: 10 }, { x: 10, y: 4 }, { x: 10, y: 10 },
-        { x: 6, y: 6 }, { x: 8, y: 8 }
-      ];
+      const islands = window.islands;
 
       const renderGrid = () => {
         const grid = [];
@@ -204,7 +345,7 @@
       };
 
       const move = (direction) => {
-        dispatch({ type: 'MOVE', direction, selectedSystem: state.selectedSystem });
+        dispatch({ type: 'MOVE', direction, team: team.toLowerCase().replace(' ', '') });
       };
 
       const surface = () => {
@@ -220,57 +361,28 @@
           const targetX = parseInt(prompt('Enter target X (0-14):') || '-1');
           const targetY = parseInt(prompt('Enter target Y (0-14):') || '-1');
           if (targetX >= 0 && targetX < 15 && targetY >= 0 && targetY < 15) {
-            const dist = Math.abs(state.position.x - targetX) + Math.abs(state.position.y - targetY);
-            const isDirect = dist === 0;
-            if (dist <= 2) {
-              dispatch({ type: 'USE_SYSTEM', system, target: { x: targetX, y: targetY, isDirect } });
-              alert(`Torpedo fired at (${targetX}, ${targetY})!`);
-            } else {
-              alert('Target too far (max 2 spaces)!');
-            }
+            dispatch({ type: 'USE_SYSTEM', system, target: { x: targetX, y: targetY }, team: team.toLowerCase().replace(' ', '') });
+            alert(`Torpedo fired at (${targetX}, ${targetY})!`);
           } else {
             alert('Invalid coordinates!');
           }
         } else if (system === 'mine') {
-          dispatch({ type: 'USE_SYSTEM', system });
+          dispatch({ type: 'USE_SYSTEM', system, team: team.toLowerCase().replace(' ', '') });
           alert('Mine dropped!');
         } else if (system === 'drone') {
           const sector = parseInt(prompt('Enter sector (1-9):') || '0');
           if (sector >= 1 && sector <= 9) {
-            dispatch({ type: 'USE_SYSTEM', system });
-            alert(`Drone launched in sector ${sector}!`);
+            dispatch({ type: 'USE_SYSTEM', system, sector, team: team.toLowerCase().replace(' ', '') });
           } else {
             alert('Invalid sector!');
           }
         } else if (system === 'sonar') {
-          dispatch({ type: 'USE_SYSTEM', system });
-          alert('Sonar activated! Enemy must reveal row, column, or sector.');
+          dispatch({ type: 'USE_SYSTEM', system, team: team.toLowerCase().replace(' ', '') });
         } else if (system === 'silence') {
           const moves = (prompt('Enter silence moves (e.g., N,S,E,W):') || '').split(',').filter(m => ['N', 'S', 'E', 'W'].includes(m));
           if (moves.length <= 4) {
-            let tempState = { ...state };
-            for (let move of moves) {
-              let newX = tempState.position.x;
-              let newY = tempState.position.y;
-              if (move === 'N') newY--;
-              else if (move === 'S') newY++;
-              else if (move === 'E') newX++;
-              else if (move === 'W') newX--;
-              if (
-                newX >= 0 && newX < 15 &&
-                newY >= 0 && newY < 15 &&
-                !islands.some(i => i.x === newX && i.y === newY) &&
-                !tempState.path.some(p => p.x === newX && p.y === newY)
-              ) {
-                tempState.position = { x: newX, y: newY };
-                tempState.path = [...tempState.path, { x: newX, y: newY }];
-              } else {
-                alert('Invalid silence move!');
-                return;
-              }
-            }
-            dispatch({ type: 'USE_SYSTEM', system });
-            alert('Silence activated!');
+            dispatch({ type: 'USE_SYSTEM', system, moves, team: team.toLowerCase().replace(' ', '') });
+            alert(`Silence activated: Moved [${moves.join(',') || 'none'}] without announcement!`);
           } else {
             alert('Too many moves (max 4)!');
           }
@@ -278,7 +390,7 @@
       };
 
       const detonateMine = (mineId) => {
-        dispatch({ type: 'DETONATE_MINE', mineId });
+        dispatch({ type: 'DETONATE_MINE', mineId, team: team.toLowerCase().replace(' ', '') });
         alert('Mine detonated!');
       };
 
@@ -295,7 +407,7 @@
           <div className="flex space-x-2 mb-2">
             <button onClick={surface} className="p-2 bg-purple-600 rounded hover:bg-purple-700" disabled={state.isSurfacing || Object.values(state.breakdowns).some(arr => arr.some(b => b))}>Surface</button>
             {state.isSurfacing && (
-              <button onClick={completeSurfacing} className="p-2 bg-green-600 rounded hover:bg-blue-700">Complete Surfacing</button>
+              <button onClick={completeSurfacing} className="p-2 bg-green-600 rounded hover:bg-green-700">Complete Surfacing</button>
             )}
           </div>
           <div className="flex space-x-2 mb-2">
@@ -325,13 +437,13 @@
             </div>
           )}
           <div className="mt-2">
-            <h4 className="text-sm font-bold">Damage: {state.damage}/4</h4>
+            <h4 className="text-sm font-bold">Damage: {window.sharedState[team.toLowerCase().replace(' ', '')] && window.sharedState[team.toLowerCase().replace(' ', '')].damage || 0}/4</h4>
           </div>
         </div>
       );
     };
 
-    // First Mate Interface (Gauge Sheet)
+    // First Mate Interface
     const FirstMateInterface = ({ team, state, dispatch }) => {
       const setSelectedSystem = (system) => {
         dispatch({ type: 'SET_SELECTED_SYSTEM', system });
@@ -372,7 +484,7 @@
       );
     };
 
-    // Engineer Interface (Breakdown Grid)
+    // Engineer Interface
     const EngineerInterface = ({ team, state }) => {
       return (
         <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
@@ -400,13 +512,34 @@
       );
     };
 
-    // Radio Operator Interface (Tracking Sheet)
+    // Radio Operator Interface
     const RadioOperatorInterface = ({ team }) => {
-      const [enemyMoves, setEnemyMoves] = useState([]);
+      const gridSize = 15;
+      const islands = window.islands;
+      // Center overlay: 15x15 grid, each cell 20px (5px base + borders/padding), total 300px x 300px
+      // Center at (7,7) by offsetting half the grid size (150px)
+      const [overlayPos, setOverlayPos] = useState({ x: -150, y: -150 });
+      const [isDragging, setIsDragging] = useState(false);
+      const [currentPos, setCurrentPos] = useState({ x: 7, y: 7 }); // Start at center
+      const [markedTiles, setMarkedTiles] = useState([{ x: 7, y: 7 }]); // Initial mark at center
+      const [enemyMoves, setEnemyMoves] = useState([]); // Log of moves
       const [sectorGuess, setSectorGuess] = useState('');
 
       const addMove = (move) => {
-        setEnemyMoves(prev => [...prev, move]);
+        // Update current position and mark tile
+        let newX = currentPos.x;
+        let newY = currentPos.y;
+        if (move === 'North') newY--;
+        else if (move === 'South') newY++;
+        else if (move === 'East') newX++;
+        else if (move === 'West') newX--;
+        if (newX >= 0 && newX < gridSize && newY >= 0 && newY < gridSize) {
+          setCurrentPos({ x: newX, y: newY });
+          setMarkedTiles(prev => [...prev, { x: newX, y: newY }]);
+          setEnemyMoves(prev => [...prev, move]);
+        } else {
+          alert('Move out of bounds!');
+        }
       };
 
       const guessSector = () => {
@@ -418,10 +551,88 @@
         }
       };
 
+      const handleMouseDown = () => {
+        setIsDragging(true);
+      };
+
+      const handleMouseUp = () => {
+        setIsDragging(false);
+      };
+
+      const handleMouseMove = (e) => {
+        if (isDragging) {
+          setOverlayPos(prev => ({
+            x: prev.x + e.movementX,
+            y: prev.y + e.movementY
+          }));
+        }
+      };
+
+      const renderMap = () => {
+        const grid = [];
+        for (let y = 0; y < gridSize; y++) {
+          const row = [];
+          for (let x = 0; x < gridSize; x++) {
+            const isIsland = islands.some(i => i.x === x && i.y === y);
+            const isSectorBorder = x % 5 === 0 || y % 5 === 0;
+            row.push(
+              <div
+                key={`${x}-${y}`}
+                className={`w-5 h-5 flex items-center justify-center text-xs border ${isSectorBorder ? 'border-gray-400' : 'border-gray-600'} ${
+                  isIsland ? 'bg-gray-400' : 'bg-gray-900'
+                }`}
+              >
+                {isIsland ? '🏝️' : ''}
+              </div>
+            );
+          }
+          grid.push(<div key={y} className="flex">{row}</div>);
+        }
+        return grid;
+      };
+
+      const renderOverlay = () => {
+        const grid = [];
+        for (let y = 0; y < gridSize; y++) {
+          const row = [];
+          for (let x = 0; x < gridSize; x++) {
+            const isMarked = markedTiles.some(m => m.x === x && m.y === y);
+            const isCurrent = x === currentPos.x && y === currentPos.y;
+            const isSectorBorder = x % 5 === 0 || y % 5 === 0;
+            row.push(
+              <div
+                key={`${x}-${y}`}
+                className={`w-5 h-5 border ${isSectorBorder ? 'border-gray-300' : 'border-gray-500'} ${
+                  isCurrent ? 'bg-yellow-600' : isMarked ? 'bg-yellow-400' : 'bg-transparent'
+                } opacity-50 flex items-center justify-center`}
+              >
+                {isCurrent ? '📍' : isMarked ? '·' : ''}
+              </div>
+            );
+          }
+          grid.push(<div key={y} className="flex">{row}</div>);
+        }
+        return grid;
+      };
+
       return (
         <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
           <h3 className="text-lg font-bold mb-2">{team} Radio Operator</h3>
-          <div className="bg-gray-800 p-2 rounded mb-2 h-40 overflow-y-auto">
+          <div className="relative mb-4" style={{ width: '300px', height: '300px' }}>
+            {/* Map Layer */}
+            <div className="absolute">{renderMap()}</div>
+            {/* Overlay Layer */}
+            <div
+              className="absolute"
+              style={{ transform: `translate(${overlayPos.x}px, ${overlayPos.y}px)`, cursor: isDragging ? 'grabbing' : 'grab' }}
+              onMouseDown={handleMouseDown}
+              onMouseUp={handleMouseUp}
+              onMouseMove={handleMouseMove}
+            >
+              {renderOverlay()}
+            </div>
+          </div>
+          <div className="bg-gray-800 p-2 rounded h-40 overflow-y-auto mb-2">
             {enemyMoves.map((move, index) => (
               <p key={index} className="text-sm">{move}</p>
             ))}
@@ -453,11 +664,16 @@
 
     // Team Dashboard
     const TeamDashboard = ({ team }) => {
-      const [state, dispatch] = useReducer(gameReducer, { ...initialGameState, selectedSystem: 'torpedo' });
+      const [state, dispatch] = useReducer(gameReducer, initialGameState);
+      const [sharedDamage, setSharedDamage] = useState(window.sharedState[team.toLowerCase().replace(' ', '')] && window.sharedState[team.toLowerCase().replace(' ', '')].damage || 0);
 
       useEffect(() => {
+        const interval = setInterval(() => {
+          setSharedDamage(window.sharedState[team.toLowerCase().replace(' ', '')] && window.sharedState[team.toLowerCase().replace(' ', '')].damage || 0);
+        }, 1000);
         console.log(`${team} Dashboard rendered`, state);
-      }, [state]);
+        return () => clearInterval(interval);
+      }, [state, team]);
 
       return (
         <div className="p-6 bg-gray-800 min-h-screen">
@@ -496,25 +712,15 @@
       console.log('Rendering App component');
       return (
         <ErrorBoundary>
-          <div className="flex flex-col md:flex-row">
-            <div className="flex-1">
-              <TeamDashboard team="Team A" />
-            </div>
-            <div className="flex-1">
-              <TeamDashboard team="Team B" />
-            </div>
-          </div>
+          <TeamDashboard team="Team A" />
         </ErrorBoundary>
       );
     };
 
-    // Render the app
-    try {
-      ReactDOM.render(<App />, document.getElementById('root'));
-      console.log('App rendered successfully');
-    } catch (error) {
-      console.error('Error rendering app:', error);
-    }
+    // Render the app with createRoot
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+    console.log('App rendered successfully');
   </script>
 </body>
 </html>

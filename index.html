@@ -159,11 +159,18 @@
               </p>
             ))}
           </div>
-          <div className="flex space-x-2 mb-2">
-            <button onClick={() => addMove('North')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">N</button>
-            <button onClick={() => addMove('South')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">S</button>
-            <button onClick={() => addMove('East')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">E</button>
-            <button onClick={() => addMove('West')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">W</button>
+          <div className="mb-2">
+            <div className="grid grid-cols-3 gap-1 w-24 mx-auto">
+              <div></div>
+              <button onClick={() => addMove('North')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">N</button>
+              <div></div>
+              <button onClick={() => addMove('West')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">W</button>
+              <div></div>
+              <button onClick={() => addMove('East')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">E</button>
+              <div></div>
+              <button onClick={() => addMove('South')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">S</button>
+              <div></div>
+            </div>
           </div>
         </div>
       );

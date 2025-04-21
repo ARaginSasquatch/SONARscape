@@ -9,14 +9,119 @@
   <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-800 text-white">
+<body className="bg-gray-800 text-white">
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect, useReducer } = React;
 
     // Shared chat state
     const initialChatMessages = [];
     let sharedChatMessages = initialChatMessages;
+
+    // Game state reducer
+    const initialGameState = {
+      position: { x: 7, y: 7 },
+      path: [{ x: 7, y: 7 }],
+      mines: [],
+      systems: { torpedo: 0, mine: 0, drone: 0, sonar: 0, silence: 0 },
+      breakdowns: { north: [false, false, false, false], south: [false, false, false, false], east: [false, false, false, false], west: [false, false, false, false], green: [false, false], orange: [false, false] },
+      isSurfacing: false,
+      damage: 0,
+      sector: 5
+    };
+
+    const systemsConfig = {
+      torpedo: { max: 2 },
+      mine: { max: 1 },
+      drone: { max: 2 },
+      sonar: { max: 1 },
+      silence: { max: 3 }
+    };
+
+    const sectorBreakdowns = {
+      1: 'north', 2: 'south', 3: 'east', 4: 'west', 5: 'green', 6: 'orange', 7: 'north', 8: 'south', 9: 'east'
+    };
+
+    const gameReducer = (state, action) => {
+      switch (action.type) {
+        case 'MOVE':
+          if (state.isSurfacing) return state;
+          const { x, y } = state.position;
+          let newX = x;
+          let newY = y;
+          if (action.direction === 'N') newY--;
+          else if (action.direction === 'S') newY++;
+          else if (action.direction === 'E') newX++;
+          else if (action.direction === 'W') newX--;
+          
+          const gridSize = 15;
+          const islands = [
+            { x: 2, y: 2 }, { x: 2, y: 12 }, { x: 3, y: 7 }, { x: 7, y: 2 },
+            { x: 7, y: 12 }, { x: 11, y: 2 }, { x: 11, y: 12 }, { x: 12, y: 7 },
+            { x: 4, y: 4 }, { x: 4, y: 10 }, { x: 10, y: 4 }, { x: 10, y: 10 },
+            { x: 6, y: 6 }, { x: 8, y: 8 }
+          ];
+          
+          if (
+            newX >= 0 && newX < gridSize &&
+            newY >= 0 && newY < gridSize &&
+            !islands.some(i => i.x === newX && i.y === newY) &&
+            !state.path.some(p => p.x === newX && p.y === newY)
+          ) {
+            const newPosition = { x: newX, y: newY };
+            const sector = Math.floor(newY / 5) * 3 + Math.floor(newX / 5) + 1;
+            const system = sectorBreakdowns[sector] || 'north';
+            const breakdowns = { ...state.breakdowns };
+            const systemBreakdowns = [...breakdowns[system]];
+            const nextFalseIndex = systemBreakdowns.indexOf(false);
+            if (nextFalseIndex !== -1) systemBreakdowns[nextFalseIndex] = true;
+            breakdowns[system] = systemBreakdowns;
+            
+            return {
+              ...state,
+              position: newPosition,
+              path: [...state.path, newPosition],
+              sector,
+              breakdowns,
+              systems: {
+                ...state.systems,
+                [action.selectedSystem]: Math.min(state.systems[action.selectedSystem] + 1, systemsConfig[action.selectedSystem].max)
+              }
+            };
+          }
+          return state;
+
+        case 'SURFACE':
+          if (state.isSurfacing || Object.values(state.breakdowns).some(arr => arr.some(b => b))) return state;
+          return { ...state, isSurfacing: true };
+
+        case 'COMPLETE_SURFACING':
+          return {
+            ...state,
+            path: [state.position],
+            isSurfacing: false,
+            breakdowns: { north: [false, false, false, false], south: [false, false, false, false], east: [false, false, false, false], west: [false, false, false, false], green: [false, false], orange: [false, false] }
+          };
+
+        case 'USE_SYSTEM':
+          if (state.isSurfacing || state.systems[action.system] < systemsConfig[action.system].max) return state;
+          let newState = { ...state, systems: { ...state.systems, [action.system]: 0 } };
+          if (action.system === 'mine') {
+            newState.mines = [...state.mines, { ...state.position, id: Date.now() }];
+          } else if (action.system === 'torpedo') {
+            if (action.target && Math.abs(state.position.x - action.target.x) + Math.abs(state.position.y - action.target.y) <= 2) {
+              newState.damage = Math.min(state.damage + (action.target.isDirect ? 2 : 1), 4);
+            }
+          }
+          return newState;
+
+        case 'DETONATE_MINE':
+          return { ...state, mines: state.mines.filter(m => m.id !== action.mineId) };
+
+        default:
+          return state;
+      }
+    };
 
     // ChatBox component
     const ChatBox = () => {
@@ -36,24 +141,24 @@
       };
 
       return (
-        <div class="bg-gray-700 p-4 rounded-lg shadow-lg w-full max-w-md">
-          <h3 class="text-lg font-bold mb-2">Team Chat</h3>
-          <div class="h-40 overflow-y-auto mb-2 bg-gray-800 p-2 rounded">
+        <div className="bg-gray-700 p-4 rounded-lg shadow-lg w-full max-w-md">
+          <h3 className="text-lg font-bold mb-2">Team Chat</h3>
+          <div className="h-40 overflow-y-auto mb-2 bg-gray-800 p-2 rounded">
             {messages.map((msg) => (
-              <p key={msg.id} class="text-sm">{msg.text}</p>
+              <p key={msg.id} className="text-sm">{msg.text}</p>
             ))}
           </div>
-          <div class="flex">
+          <div className="flex">
             <input
               type="text"
               value={message}
               onChange={(e) => setMessage(e.target.value)}
-              class="flex-1 p-2 rounded-l bg-gray-600 text-white"
+              className="flex-1 p-2 rounded-l bg-gray-600 text-white"
               placeholder="Type a message..."
             />
             <button
               onClick={sendMessage}
-              class="p-2 bg-blue-600 rounded-r hover:bg-blue-700"
+              className="p-2 bg-blue-600 rounded-r hover:bg-blue-700"
             >
               Send
             </button>
@@ -62,72 +167,354 @@
       );
     };
 
-    // Captain Interface
-    const CaptainInterface = ({ team, gameState, updateGameState }) => {
+    // Captain Interface (15x15 grid)
+    const CaptainInterface = ({ team, state, dispatch }) => {
       const gridSize = 15;
       const islands = [
-        { x: 3, y: 3 }, { x: 3, y: 11 }, { x: 11, y: 3 }, { x: 11, y: 11 }
+        { x: 2, y: 2 }, { x: 2, y: 12 }, { x: 3, y: 7 }, { x: 7, y: 2 },
+        { x: 7, y: 12 }, { x: 11, y: 2 }, { x: 11, y: 12 }, { x: 12, y: 7 },
+        { x: 4, y: 4 }, { x: 4, y: 10 }, { x: 10, y: 4 }, { x: 10, y: 10 },
+        { x: 6, y: 6 }, { x: 8, y: 8 }
       ];
 
-      const getSector = (x, y) => {
-        const sectorX = Math.floor(x / 5);
-        const sectorY = Math.floor(y / 5);
-        return sectorY * 3 + sectorX + 1;
-      };
-
-      const isValidMove = (x, y) => {
-        return (
-          x >= 0 &&
-          x < gridSize &&
-          y >= 0 &&
-          y < gridSize &&
-          !islands.some((i) => i.x === x && i.y === y) &&
-          !gameState.path.some((p) => p.x === x && p.y === y)
-        );
+      const renderGrid = () => {
+        const grid = [];
+        for (let y = 0; y < gridSize; y++) {
+          const row = [];
+          for (let x = 0; x < gridSize; x++) {
+            const isSub = x === state.position.x && y === state.position.y;
+            const isPath = state.path.some(p => p.x === x && p.y === y && !(p.x === state.position.x && p.y === state.position.y));
+            const isIsland = islands.some(i => i.x === x && i.y === y);
+            const isMine = state.mines.some(m => m.x === x && m.y === y);
+            const isSectorBorder = x % 5 === 0 || y % 5 === 0;
+            row.push(
+              <div
+                key={`${x}-${y}`}
+                className={`w-5 h-5 flex items-center justify-center text-xs border ${isSectorBorder ? 'border-gray-400' : 'border-gray-600'} ${
+                  isSub ? 'bg-blue-600' : isIsland ? 'bg-gray-400' : isPath ? 'bg-gray-500' : isMine ? 'bg-red-600' : 'bg-gray-900'
+                }`}
+              >
+                {isSub ? '🚢' : isIsland ? '🏝️' : isMine ? '💣' : isPath ? '·' : ''}
+              </div>
+            );
+          }
+          grid.push(<div key={y} className="flex">{row}</div>);
+        }
+        return grid;
       };
 
       const move = (direction) => {
-        if (gameState.isSurfacing) {
-          alert('Cannot move while surfacing!');
-          return;
-        }
-        const { x, y } = gameState.position;
-        let newX = x;
-        let newY = y;
-        if (direction === 'N') newY--;
-        else if (direction === 'S') newY++;
-        else if (direction === 'E') newX++;
-        else if (direction === 'W') newX--;
-
-        if (isValidMove(newX, newY)) {
-          const newPosition = { x: newX, y: newY };
-          updateGameState({
-            position: newPosition,
-            path: [...gameState.path, newPosition],
-            sector: getSector(newX, newY)
-          });
-          alert(`${team} moved ${direction}!`);
-        } else {
-          alert('Invalid move: Blocked by path or island!');
-        }
+        dispatch({ type: 'MOVE', direction, selectedSystem: state.selectedSystem });
       };
 
       const surface = () => {
-        if (gameState.isSurfacing) {
-          alert('Already surfacing!');
-          return;
-        }
-        if (Object.values(gameState.breakdowns).some((b) => b)) {
-          alert('Cannot surface: Engineer must repair all breakdowns!');
-          return;
-        }
-        updateGameState({ isSurfacing: true });
-        alert(`${team} is surfacing!`);
+        dispatch({ type: 'SURFACE' });
       };
 
       const completeSurfacing = () => {
-        updateGameState({
-          path: [gameState.position],
-          isSurfacing: false,
-          breakdowns: {
-            north: idiom: I'm all ears! If you've got any tweaks, specific rulebook pages, or extra features (like damage tracking or fancier visuals), just let me know, and I'll dive right in. What's next?
+        dispatch({ type: 'COMPLETE_SURFACING' });
+      };
+
+      const useSystem = (system) => {
+        if (system === 'torpedo') {
+          const targetX = parseInt(prompt('Enter target X (0-14):') || '-1');
+          const targetY = parseInt(prompt('Enter target Y (0-14):') || '-1');
+          if (targetX >= 0 && targetX < 15 && targetY >= 0 && targetY < 15) {
+            const dist = Math.abs(state.position.x - targetX) + Math.abs(state.position.y - targetY);
+            const isDirect = dist === 0;
+            if (dist <= 2) {
+              dispatch({ type: 'USE_SYSTEM', system, target: { x: targetX, y: targetY, isDirect } });
+              alert(`Torpedo fired at (${targetX}, ${targetY})!`);
+            } else {
+              alert('Target too far (max 2 spaces)!');
+            }
+          } else {
+            alert('Invalid coordinates!');
+          }
+        } else if (system === 'mine') {
+          dispatch({ type: 'USE_SYSTEM', system });
+          alert('Mine dropped!');
+        } else if (system === 'drone') {
+          const sector = parseInt(prompt('Enter sector (1-9):') || '0');
+          if (sector >= 1 && sector <= 9) {
+            dispatch({ type: 'USE_SYSTEM', system });
+            alert(`Drone launched in sector ${sector}!`);
+          } else {
+            alert('Invalid sector!');
+          }
+        } else if (system === 'sonar') {
+          dispatch({ type: 'USE_SYSTEM', system });
+          alert('Sonar activated! Enemy must reveal row, column, or sector.');
+        } else if (system === 'silence') {
+          const moves = (prompt('Enter silence moves (e.g., N,S,E,W):') || '').split(',').filter(m => ['N', 'S', 'E', 'W'].includes(m));
+          if (moves.length <= 4) {
+            let tempState = { ...state };
+            for (let move of moves) {
+              let newX = tempState.position.x;
+              let newY = tempState.position.y;
+              if (move === 'N') newY--;
+              else if (move === 'S') newY++;
+              else if (move === 'E') newX++;
+              else if (move === 'W') newX--;
+              if (
+                newX >= 0 && newX < 15 &&
+                newY >= 0 && newY < 15 &&
+                !islands.some(i => i.x === newX && i.y === newY) &&
+                !tempState.path.some(p => p.x === newX && p.y === newY)
+              ) {
+                tempState.position = { x: newX, y: newY };
+                tempState.path = [...tempState.path, { x: newX, y: newY }];
+              } else {
+                alert('Invalid silence move!');
+                return;
+              }
+            }
+            dispatch({ type: 'USE_SYSTEM', system });
+            alert('Silence activated!');
+          } else {
+            alert('Too many moves (max 4)!');
+          }
+        }
+      };
+
+      const detonateMine = (mineId) => {
+        dispatch({ type: 'DETONATE_MINE', mineId });
+        alert('Mine detonated!');
+      };
+
+      return (
+        <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
+          <h3 className="text-lg font-bold mb-2">{team} Captain</h3>
+          <div className="mb-4">{renderGrid()}</div>
+          <div className="flex space-x-2 mb-2">
+            <button onClick={() => move('N')} className="p-2 bg-blue-600 rounded hover:bg-blue-700" disabled={state.isSurfacing}>North</button>
+            <button onClick={() => move('S')} className="p-2 bg-blue-600 rounded hover:bg-blue-700" disabled={state.isSurfacing}>South</button>
+            <button onClick={() => move('E')} className="p-2 bg-blue-600 rounded hover:bg-blue-700" disabled={state.isSurfacing}>East</button>
+            <button onClick={() => move('W')} className="p-2 bg-blue-600 rounded hover:bg-blue-700" disabled={state.isSurfacing}>West</button>
+          </div>
+          <div className="flex space-x-2 mb-2">
+            <button onClick={surface} className="p-2 bg-purple-600 rounded hover:bg-purple-700" disabled={state.isSurfacing || Object.values(state.breakdowns).some(arr => arr.some(b => b))}>Surface</button>
+            {state.isSurfacing && (
+              <button onClick={completeSurfacing} className="p-2 bg-green-600 rounded hover:bg-blue-700">Complete Surfacing</button>
+            )}
+          </div>
+          <div className="flex space-x-2 mb-2">
+            {Object.keys(systemsConfig).map(system => (
+              <button
+                key={system}
+                onClick={() => useSystem(system)}
+                className={`p-2 rounded hover:bg-${system === 'torpedo' ? 'red' : system === 'mine' ? 'orange' : system === 'drone' ? 'yellow' : system === 'sonar' ? 'green' : 'purple'}-700 bg-${system === 'torpedo' ? 'red' : system === 'mine' ? 'orange' : system === 'drone' ? 'yellow' : system === 'sonar' ? 'green' : 'purple'}-600`}
+                disabled={state.isSurfacing || state.systems[system] < systemsConfig[system].max}
+              >
+                {system.charAt(0).toUpperCase() + system.slice(1)}
+              </button>
+            ))}
+          </div>
+          {state.mines.length > 0 && (
+            <div className="mt-2">
+              <h4 className="text-sm font-bold">Mines:</h4>
+              {state.mines.map(mine => (
+                <button
+                  key={mine.id}
+                  onClick={() => detonateMine(mine.id)}
+                  className="p-1 bg-red-600 rounded hover:bg-red-700 text-xs mr-1"
+                >
+                  Detonate ({mine.x}, {mine.y})
+                </button>
+              ))}
+            </div>
+          )}
+          <div className="mt-2">
+            <h4 className="text-sm font-bold">Damage: {state.damage}/4</h4>
+          </div>
+        </div>
+      );
+    };
+
+    // First Mate Interface (Gauge Sheet)
+    const FirstMateInterface = ({ team, state, dispatch }) => {
+      const setSelectedSystem = (system) => {
+        dispatch({ type: 'SET_SELECTED_SYSTEM', system });
+      };
+
+      return (
+        <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
+          <h3 className="text-lg font-bold mb-2">{team} First Mate</h3>
+          <div className="mb-2">
+            <label className="mr-2">Charge System:</label>
+            <select
+              value={state.selectedSystem}
+              onChange={(e) => setSelectedSystem(e.target.value)}
+              className="p-1 bg-gray-600 rounded"
+            >
+              {Object.keys(systemsConfig).map(system => (
+                <option key={system} value={system}>{system.charAt(0).toUpperCase() + system.slice(1)}</option>
+              ))}
+            </select>
+          </div>
+          <div className="space-y-2">
+            {Object.keys(systemsConfig).map(system => (
+              <div key={system} className="flex items-center">
+                <span className="w-24 capitalize">{system}</span>
+                <div className="flex-1 flex space-x-1">
+                  {[...Array(systemsConfig[system].max)].map((_, i) => (
+                    <div
+                      key={i}
+                      className={`w-6 h-6 border border-gray-500 ${i < state.systems[system] ? 'bg-green-600' : 'bg-gray-600'}`}
+                    ></div>
+                  ))}
+                </div>
+                <span className="ml-2">{state.systems[system]}/{systemsConfig[system].max}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    // Engineer Interface (Breakdown Grid)
+    const EngineerInterface = ({ team, state }) => {
+      return (
+        <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
+          <h3 className="text-lg font-bold mb-2">{team} Engineer</h3>
+          <div className="grid grid-cols-4 gap-2">
+            {Object.keys(state.breakdowns).map(system => (
+              <div key={system} className="flex flex-col">
+                <span className="capitalize text-sm mb-1">{system}</span>
+                <div className="flex flex-col space-y-1">
+                  {state.breakdowns[system].map((checked, i) => (
+                    <input
+                      key={i}
+                      type="checkbox"
+                      checked={checked}
+                      onChange={() => {}}
+                      className="w-5 h-5"
+                      disabled
+                    />
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    // Radio Operator Interface (Tracking Sheet)
+    const RadioOperatorInterface = ({ team }) => {
+      const [enemyMoves, setEnemyMoves] = useState([]);
+      const [sectorGuess, setSectorGuess] = useState('');
+
+      const addMove = (move) => {
+        setEnemyMoves(prev => [...prev, move]);
+      };
+
+      const guessSector = () => {
+        if (sectorGuess >= 1 && sectorGuess <= 9) {
+          alert(`Guessed enemy in sector ${sectorGuess}!`);
+          setSectorGuess('');
+        } else {
+          alert('Invalid sector!');
+        }
+      };
+
+      return (
+        <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
+          <h3 className="text-lg font-bold mb-2">{team} Radio Operator</h3>
+          <div className="bg-gray-800 p-2 rounded mb-2 h-40 overflow-y-auto">
+            {enemyMoves.map((move, index) => (
+              <p key={index} className="text-sm">{move}</p>
+            ))}
+          </div>
+          <div className="flex space-x-2 mb-2">
+            <button onClick={() => addMove('North')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">N</button>
+            <button onClick={() => addMove('South')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">S</button>
+            <button onClick={() => addMove('East')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">E</button>
+            <button onClick={() => addMove('West')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">W</button>
+          </div>
+          <div className="flex">
+            <input
+              type="number"
+              value={sectorGuess}
+              onChange={(e) => setSectorGuess(e.target.value)}
+              className="p-2 bg-gray-600 rounded-l text-white w-20"
+              placeholder="Sector (1-9)"
+            />
+            <button
+              onClick={guessSector}
+              className="p-2 bg-blue-600 rounded-r hover:bg-blue-700"
+            >
+              Guess Sector
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    // Team Dashboard
+    const TeamDashboard = ({ team }) => {
+      const [state, dispatch] = useReducer(gameReducer, { ...initialGameState, selectedSystem: 'torpedo' });
+
+      useEffect(() => {
+        console.log(`${team} Dashboard rendered`, state);
+      }, [state]);
+
+      return (
+        <div className="p-6 bg-gray-800 min-h-screen">
+          <h1 className="text-2xl font-bold mb-4">{team} Dashboard</h1>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CaptainInterface team={team} state={state} dispatch={dispatch} />
+            <FirstMateInterface team={team} state={state} dispatch={dispatch} />
+            <EngineerInterface team={team} state={state} />
+            <RadioOperatorInterface team={team} />
+          </div>
+          <div className="mt-6">
+            <ChatBox />
+          </div>
+        </div>
+      );
+    };
+
+    // Error Boundary
+    class ErrorBoundary extends React.Component {
+      state = { hasError: false };
+
+      static getDerivedStateFromError(error) {
+        return { hasError: true };
+      }
+
+      render() {
+        if (this.state.hasError) {
+          return <h1 className="text-red-600">Something went wrong. Check console for details.</h1>;
+        }
+        return this.props.children;
+      }
+    }
+
+    // Main App
+    const App = () => {
+      console.log('Rendering App component');
+      return (
+        <ErrorBoundary>
+          <div className="flex flex-col md:flex-row">
+            <div className="flex-1">
+              <TeamDashboard team="Team A" />
+            </div>
+            <div className="flex-1">
+              <TeamDashboard team="Team B" />
+            </div>
+          </div>
+        </ErrorBoundary>
+      );
+    };
+
+    // Render the app
+    try {
+      ReactDOM.render(<App />, document.getElementById('root'));
+      console.log('App rendered successfully');
+    } catch (error) {
+      console.error('Error rendering app:', error);
+    }
+  </script>
+</body>
+</html>

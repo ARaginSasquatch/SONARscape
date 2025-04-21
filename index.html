@@ -3,1725 +3,257 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SONARScape Role Interface</title>
-  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.9/babel.min.js"></script>
+  <title>SONARScape: Captain Sonar Interface</title>
+  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.development.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@6.26.0/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
-<body class="bg-gray-100 font-sans">
+<body class="bg-gray-800 text-white">
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect, useRef } = React;<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SONARScape Role Interface</title>
-  <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js" onerror="this.src='https://unpkg.com/react@18.2.0/umd/react.production.min.js'"></script>
-  <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js" onerror="this.src='https://unpkg.com/react-dom@18.2.0/umd/react-dom.production.min.js'"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.9/babel.min.js" onerror="this.src='https://unpkg.com/@babel/standalone@7.22.9/babel.min.js'"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-</head>
-<body class="bg-gray-100 font-sans">
-  <div id="root"></div>
-  <script type="text/babel">
-    const { useState, useEffect, useRef } = React;
+    const { useState, useEffect } = React;
 
-    // Game State
-    const initialState = {
-      teams: {
-        Trident: {
-          xp: 0,
-          points: 0,
-          tilesCleared: 0,
-          position: 'A1',
-          health: 20,
-          weaponsLevel: 0,
-          detectionLevel: 0,
-          stealthLevel: 0,
-          stealthPoints: 0,
-          moveLog: [],
-          lastMove: null,
-          lastPosition: 'A1',
-          enemyPosition: null
-        },
-        Harpoon: {
-          xp: 0,
-          points: 0,
-          tilesCleared: 0,
-          position: 'E4',
-          health: 20,
-          weaponsLevel: 0,
-          detectionLevel: 0,
-          stealthLevel: 0,
-          stealthPoints: 0,
-          moveLog: [],
-          lastMove: null,
-          lastPosition: 'E4',
-          enemyPosition: null
-        }
-      },
-      tasks: [],
-      players: {},
-      timer: { minutes: 10, seconds: 0 },
-      messages: []
-    };
+    // Shared chat state
+    const initialChatMessages = [];
+    let sharedChatMessages = initialChatMessages;
 
-    // Task List
-    const taskList = [
-      { tile: 'A1', task: 'Bludgeon piece', points: 10, xp: 5000, type: 'boss', cap: 3 },
-      { tile: 'A1', task: 'Orphan pet', points: 25, xp: 10000, type: 'boss', cap: 3 },
-      { tile: 'A1', task: 'Unsired', points: 5, xp: 5000, type: 'boss', cap: 3 },
-      { tile: 'A4', task: 'Avernic hilt', points: 30, xp: 10000, type: 'boss', cap: 3 },
-      { tile: 'A4', task: 'Sanguinesti staff', points: 40, xp: 10000, type: 'boss', cap: 3 },
-      { tile: 'A5', task: 'Champion Scroll', points: 10, xp: 5000, type: 'non-boss', cap: 3 },
-      { tile: 'B5', task: 'Dragon pickaxe', points: 15, xp: 10000, type: 'non-boss', cap: 2 },
-      { tile: 'B5', task: 'Bear pet', points: 25, xp: 10000, type: 'non-boss', cap: 2 }
-    ];
+    // ChatBox component (shared between teams)
+    const ChatBox = () => {
+      const [message, setMessage] = useState('');
+      const [messages, setMessages] = useState(sharedChatMessages);
 
-    // Tiles (Sectors with Islands)
-    const tiles = {
-      'A1': { sector: 'A1', region: 1, passable: true }, 'A2': { sector: 'A2', region: 1, passable: true },
-      'A3': { sector: 'A3', region: 1, passable: true }, 'A4': { sector: 'A4', region: 1, passable: true },
-      'A5': { sector: 'A5', region: 1, passable: true }, 'B1': { sector: 'B1', region: 1, passable: true },
-      'B2': { sector: 'B2', region: 1, passable: true }, 'B3': { sector: 'B3', region: 1, passable: false }, // Island
-      'B4': { sector: 'B4', region: 1, passable: true }, 'B5': { sector: 'B5', region: 1, passable: true },
-      'C1': { sector: 'C1', region: 2, passable: true }, 'C2': { sector: 'C2', region: 2, passable: false }, // Island
-      'C3': { sector: 'C3', region: 2, passable: true }, 'C4': { sector: 'C4', region: 2, passable: true },
-      'C5': { sector: 'C5', region: 2, passable: true }, 'D1': { sector: 'D1', region: 2, passable: true },
-      'D2': { sector: 'D2', region: 2, passable: true }, 'D3': { sector: 'D3', region: 2, passable: true },
-      'D4': { sector: 'D4', region: 2, passable: false }, // Island
-      'D5': { sector: 'D5', region: 2, passable: true }, 'E1': { sector: 'E1', region: 3, passable: true },
-      'E2': { sector: 'E2', region: 3, passable: false }, // Island
-      'E3': { sector: 'E3', region: 3, passable: true }, 'E4': { sector: 'E4', region: 3, passable: true },
-      'E5': { sector: 'E5', region: 3, passable: true }
-    };
-
-    // Main App Component
-    function App() {
-      const [state, setState] = useState(() => {
-        try {
-          const savedState = localStorage.getItem('gameState');
-          return savedState ? JSON.parse(savedState) : initialState;
-        } catch (e) {
-          console.error('Failed to parse localStorage:', e);
-          return initialState;
-        }
-      });
-      const [team, setTeam] = useState('Trident');
-      const [role, setRole] = useState('Captain');
-      const [isLeader, setIsLeader] = useState(true);
-      const [playerId, setPlayerId] = useState('Player1');
-
-      // Timer Logic (Execution only)
       useEffect(() => {
-        const interval = setInterval(() => {
-          setState(prev => {
-            let { minutes, seconds } = prev.timer;
-            seconds--;
-            if (seconds < 0) {
-              seconds = 59;
-              minutes--;
-            }
-            if (minutes === 0 && seconds === 0) {
-              minutes = 10;
-              seconds = 0;
-            }
-            return { ...prev, timer: { minutes, seconds } };
-          });
-        }, 1000);
-        return () => clearInterval(interval);
+        setMessages(sharedChatMessages);
       }, []);
 
-      // Save state to localStorage
-      useEffect(() => {
-        try {
-          localStorage.setItem('gameState', JSON.stringify(state));
-        } catch (e) {
-          console.error('Failed to save to localStorage:', e);
+      const sendMessage = () => {
+        if (message.trim()) {
+          sharedChatMessages = [...sharedChatMessages, { text: message, id: Date.now() }];
+          setMessages(sharedChatMessages);
+          setMessage('');
         }
-      }, [state]);
-
-      // Add Message
-      const addMessage = (message) => {
-        setState(prev => ({
-          ...prev,
-          messages: [...prev.messages, { team, role, playerId, message, time: new Date().toLocaleTimeString() }]
-        }));
       };
 
-      // Error Boundary
-      class ErrorBoundary extends React.Component {
-        state = { hasError: false, error: null };
-        static getDerivedStateFromError(error) {
-          return { hasError: true, error };
-        }
-        componentDidCatch(error, info) {
-          console.error('ErrorBoundary caught:', error, info);
-        }
-        render() {
-          if (this.state.hasError) {
-            return (
-              <div className="p-4 text-red-500">
-                <h1>Error: Something went wrong.</h1>
-                <p>{this.state.error?.message || 'Unknown error'}</p>
-                <p>Refresh the page or check Console for details.</p>
+      return (
+        <div class="bg-gray-700 p-4 rounded-lg shadow-lg w-full max-w-md">
+          <h3 class="text-lg font-bold mb-2">Team Chat</h3>
+          <div class="h-40 overflow-y-auto mb-2 bg-gray-800 p-2 rounded">
+            {messages.map((msg) => (
+              <p key={msg.id} class="text-sm">{msg.text}</p>
+            ))}
+          </div>
+          <div class="flex">
+            <input
+              type="text"
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              class="flex-1 p-2 rounded-l bg-gray-600 text-white"
+              placeholder="Type a message..."
+            />
+            <button
+              onClick={sendMessage}
+              class="p-2 bg-blue-600 rounded-r hover:bg-blue-700"
+            >
+              Send
+            </button>
+          </div>
+        </div>
+      );
+    };
+
+    // Captain Interface (8x8 grid for movement and actions)
+    const CaptainInterface = ({ team }) => {
+      const [position, setPosition] = useState({ x: 4, y: 4 });
+      const gridSize = 8;
+
+      const move = (direction) => {
+        setPosition((prev) => {
+          let newX = prev.x;
+          let newY = prev.y;
+          if (direction === 'N' && prev.y > 0) newY--;
+          if (direction === 'S' && prev.y < gridSize - 1) newY++;
+          if (direction === 'E' && prev.x < gridSize - 1) newX++;
+          if (direction === 'W' && prev.x > 0) newX--;
+          return { x: newX, y: newY };
+        });
+      };
+
+      const renderGrid = () => {
+        const grid = [];
+        for (let y = 0; y < gridSize; y++) {
+          const row = [];
+          for (let x = 0; x < gridSize; x++) {
+            const isSub = x === position.x && y === position.y;
+            row.push(
+              <div
+                key={`${x}-${y}`}
+                class={`w-8 h-8 border border-gray-500 flex items-center justify-center ${
+                  isSub ? 'bg-blue-600' : 'bg-gray-900'
+                }`}
+              >
+                {isSub ? '🚢' : ''}
               </div>
             );
           }
-          return this.props.children;
+          grid.push(<div key={y} class="flex">{row}</div>);
         }
-      }
-
-      // Role Selector
-      const RoleSelector = () => (
-        <div className="p-4 bg-white rounded shadow mb-4 relative z-50">
-          <h2 className="text-xl font-bold mb-2">Select Role</h2>
-          <div className="flex space-x-4">
-            <select className="p-2 border rounded z-50" value={team} onChange={(e) => setTeam(e.target.value)}>
-              <option>Trident</option>
-              <option>Harpoon</option>
-            </select>
-            <select className="p-2 border rounded z-50" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option>Captain</option>
-              <option>Weapons</option>
-              <option>Detection</option>
-              <option>Systems</option>
-            </select>
-            <input
-              type="text"
-              className="p-2 border rounded"
-              value={playerId}
-              onChange={(e) => setPlayerId(e.target.value)}
-              placeholder="Enter Player ID"
-            />
-            <label className="flex items-center">
-              <input type="checkbox" checked={isLeader} onChange={(e) => setIsLeader(e.target.checked)} className="mr-2" />
-              Is Leader?
-            </label>
-          </div>
-        </div>
-      );
-
-      // Timer Display
-      const TimerDisplay = () => (
-        <div className="p-4 bg-white rounded shadow mb-4">
-          <h2 className="text-xl font-bold">Timer</h2>
-          <p>{state.timer.minutes}:{state.timer.seconds < 10 ? '0' : ''}{state.timer.seconds}</p>
-        </div>
-      );
-
-      // Chat Box
-      const ChatBox = () => (
-        <div className="p-4 bg-white rounded shadow mb-4">
-          <h2 className="text-xl font-bold mb-2">Chat</h2>
-          <div className="h-40 overflow-y-scroll border p-2 mb-2">
-            {state.messages.map((msg, idx) => (
-              <p key={idx}>{msg.time} [{msg.team} {msg.role} {msg.playerId}]: {msg.message}</p>
-            ))}
-          </div>
-          <input
-            type="text"
-            className="p-2 border rounded w-full"
-            placeholder="Type message..."
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.target.value) {
-                addMessage(e.target.value);
-                e.target.value = '';
-              }
-            }}
-          />
-        </div>
-      );
-
-      // Scoreboard
-      const Scoreboard = () => (
-        <div className="p-4 bg-white rounded shadow mb-4">
-          <h2 className="text-xl font-bold mb-2">Scoreboard</h2>
-          <p>{team} Points: {state.teams[team]?.points || 0}</p>
-          <p>Tiles Cleared: {state.teams[team]?.tilesCleared || 0}</p>
-          <h3 className="font-semibold mt-2">Player Scores</h3>
-          {Object.entries(state.players || {}).map(([id, data]) => (
-            <p key={id}>{id}: {data.points} points</p>
-          ))}
-        </div>
-      );
-
-      // Captain Dashboard
-      function CaptainDashboard() {
-        const canvasRef = useRef(null);
-
-        useEffect(() => {
-          const canvas = canvasRef.current;
-          if (!canvas) {
-            console.error('Canvas not found');
-            return;
-          }
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            console.error('Canvas context not available');
-            return;
-          }
-          const cellSize = 80;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          // Draw grid (sea)
-          ctx.fillStyle = '#1e3a8a';
-          ctx.fillRect(0, 0, 5 * cellSize, 5 * cellSize);
-          ctx.strokeStyle = '#000';
-          for (let i = 0; i <= 5; i++) {
-            ctx.beginPath();
-            ctx.moveTo(i * cellSize, 0);
-            ctx.lineTo(i * cellSize, 5 * cellSize);
-            ctx.moveTo(0, i * cellSize);
-            ctx.lineTo(5 * cellSize, i * cellSize);
-            ctx.stroke();
-          }
-
-          // Draw sectors and islands
-          Object.keys(tiles).forEach(tile => {
-            const row = tile.charCodeAt(0) - 65;
-            const col = parseInt(tile[1]) - 1;
-            ctx.fillStyle = tiles[tile].passable ? (tiles[tile].status === 'Cleared' ? '#22c55e' : '#1e3a8a') : '#4b5563';
-            ctx.fillRect(col * cellSize + 1, row * cellSize + 1, cellSize - 2, cellSize - 2);
-            if (!tiles[tile].passable) {
-              // Crosshatch for islands
-              ctx.strokeStyle = '#000';
-              ctx.lineWidth = 1;
-              for (let i = -cellSize; i < cellSize; i += 5) {
-                ctx.beginPath();
-                ctx.moveTo(col * cellSize + i, row * cellSize);
-                ctx.lineTo(col * cellSize + i + cellSize, row * cellSize + cellSize);
-                ctx.stroke();
-              }
-            }
-            ctx.fillStyle = '#fff';
-            ctx.font = '14px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(tiles[tile].sector, col * cellSize + cellSize / 2, row * cellSize + cellSize / 2);
-            ctx.font = '10px Arial';
-            ctx.fillText(`Region ${tiles[tile].region}`, col * cellSize + cellSize / 2, row * cellSize + cellSize - 10);
-          });
-
-          // Draw path
-          ctx.strokeStyle = team === 'Trident' ? '#3b82f6' : '#ef4444';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          (state.teams[team]?.moveLog || []).forEach((move, idx) => {
-            const [row, col] = [move.tile.charCodeAt(0) - 65, parseInt(move.tile[1]) - 1];
-            if (idx === 0) ctx.moveTo(col * cellSize + cellSize / 2, row * cellSize + cellSize / 2);
-            else ctx.lineTo(col * cellSize + cellSize / 2, row * cellSize + cellSize / 2);
-          });
-          ctx.stroke();
-
-          // Highlight current position
-          const [currentRow, currentCol] = [state.teams[team]?.position?.charCodeAt(0) - 65 || 0, parseInt(state.teams[team]?.position?.[1] || 1) - 1];
-          ctx.fillStyle = team === 'Trident' ? 'rgba(59, 130, 246, 0.5)' : 'rgba(239, 68, 68, 0.5)';
-          ctx.fillRect(currentCol * cellSize + 1, currentRow * cellSize + 1, cellSize - 2, cellSize - 2);
-
-          // Highlight enemy position (if scanned)
-          if (state.teams[team]?.enemyPosition) {
-            const [enemyRow, enemyCol] = [state.teams[team].enemyPosition.charCodeAt(0) - 65, parseInt(state.teams[team].enemyPosition[1]) - 1];
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-            ctx.lineWidth = 5;
-            ctx.strokeRect(enemyCol * cellSize + 3, enemyRow * cellSize + 3, cellSize - 6, cellSize - 6);
-          }
-        }, [state.teams[team]?.position, state.teams[team]?.moveLog, state.teams[team]?.enemyPosition]);
-
-        const move = (tile) => {
-          if (!isLeader) return;
-          const currentTile = state.teams[team]?.position;
-          if (!currentTile) {
-            addMessage('Error: Current position not set.');
-            return;
-          }
-          const [currentRow, currentCol] = [currentTile.charCodeAt(0) - 65, parseInt(currentTile[1])];
-          const [newRow, newCol] = [tile.charCodeAt(0) - 65, parseInt(tile[1])];
-          if (Math.abs(newRow - currentRow) + Math.abs(newCol - currentCol) !== 1 ||
-              !tiles[tile].passable ||
-              tiles[tile].status === 'Cleared') {
-            addMessage('Invalid move: Must be adjacent, passable, and not cleared.');
-            return;
-          }
-
-          let xpCost = 20000;
-          const lastMove = state.teams[team]?.lastMove;
-          const direction = newRow < currentRow ? 'N' : newRow > currentRow ? 'S' : newCol > currentCol ? 'E' : 'W';
-          if (lastMove === direction) xpCost -= 5000;
-
-          if (state.teams[team]?.xp >= xpCost) {
-            const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
-            if (state.teams[otherTeam]?.position === tile) {
-              addMessage(`Conflict at ${tile}! Use Stop! to resolve.`);
-              return;
-            }
-            setState(prev => ({
-              ...prev,
-              teams: {
-                ...prev.teams,
-                [team]: {
-                  ...prev.teams[team],
-                  position: tile,
-                  xp: prev.teams[team].xp - xpCost,
-                  lastMove: direction,
-                  lastPosition: currentTile,
-                  moveLog: [...(prev.teams[team]?.moveLog || []), { tile, direction, xp: xpCost, time: new Date().toLocaleTimeString() }]
-                }
-              }
-            }));
-            addMessage(`Moved ${direction} to ${tiles[tile].sector} (${xpCost} XP)`);
-          } else {
-            addMessage('Not enough XP to move!');
-          }
-        };
-
-        const stop = () => {
-          if (!isLeader) return;
-          const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
-          const currentTile = state.teams[team]?.position;
-          if (state.teams[otherTeam]?.position === currentTile) {
-            const teamXP = state.teams[team]?.xp || 0;
-            const otherXP = state.teams[otherTeam]?.xp || 0;
-            if (teamXP > otherXP) {
-              setState(prev => ({
-                ...prev,
-                teams: {
-                  ...prev.teams,
-                  [otherTeam]: { ...prev.teams[otherTeam], position: prev.teams[otherTeam]?.lastPosition || 'E4' }
-                }
-              }));
-              addMessage(`Stop! ${team} wins sector ${currentTile}.`);
-            } else {
-              setState(prev => ({
-                ...prev,
-                teams: {
-                  ...prev.teams,
-                  [team]: { ...prev.teams[team], position: prev.teams[team]?.lastPosition || 'A1' }
-                }
-              }));
-              addMessage(`Stop! ${otherTeam} wins sector ${currentTile}.`);
-            }
-          }
-        };
-
-        const surface = () => {
-          if (!isLeader) return;
-          if (state.teams[team]?.xp >= 10000) {
-            setState(prev => ({
-              ...prev,
-              teams: {
-                ...prev.teams,
-                [team]: {
-                  ...prev.teams[team],
-                  xp: prev.teams[team].xp - 10000,
-                  moveLog: [],
-                  lastMove: null,
-                  lastPosition: prev.teams[team].position
-                }
-              }
-            }));
-            addMessage(`${team} surfaced at ${state.teams[team]?.position} (10,000 XP)`);
-          } else {
-            addMessage('Not enough XP to surface!');
-          }
-        };
-
-        const suggestMove = (direction) => {
-          if (isLeader) return;
-          addMessage(`Suggested move: ${direction}`);
-        };
-
-        return (
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Captains Dashboard</h2>
-            <canvas ref={canvasRef} width={400} height={400} className="mb-4 border" onClick={(e) => {
-              if (!isLeader) return;
-              const canvas = canvasRef.current;
-              if (!canvas) return;
-              const rect = canvas.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const y = e.clientY - rect.top;
-              const cellSize = 80;
-              const col = Math.floor(x / cellSize) + 1;
-              const row = String.fromCharCode(65 + Math.floor(y / cellSize));
-              const tile = `${row}${col}`;
-              if (tiles[tile]) move(tile);
-            }} />
-            <div className="flex space-x-2 mb-4">
-              {isLeader && (
-                <>
-                  <button className="px-4 py-2 bg-red-500 text-white rounded" onClick={stop}>Stop!</button>
-                  <button className="px-4 py-2 bg-yellow-500 text-white rounded" onClick={surface}>Surface</button>
-                </>
-              )}
-              {!isLeader && (
-                <>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('North')}>Suggest North</button>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('South')}>Suggest South</button>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('East')}>Suggest East</button>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('West')}>Suggest West</button>
-                </>
-              )}
-            </div>
-            <p>Team XP: {state.teams[team]?.xp || 0}</p>
-            <h3 className="text-lg font-semibold mt-4">Move Log</h3>
-            <div className="h-40 overflow-y-scroll border">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-200">
-                    <th className="p-2">Direction</th>
-                    <th className="p-2">Sector</th>
-                    <th className="p-2">XP</th>
-                    <th className="p-2">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(state.teams[team]?.moveLog || []).map((move, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="p-2">{move.direction}</td>
-                      <td className="p-2">{tiles[move.tile]?.sector || move.tile}</td>
-                      <td className="p-2">{move.xp}</td>
-                      <td className="p-2">{move.time}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      }
-
-      // Weapons Officer Dashboard
-      function WeaponsOfficerDashboard() {
-        const assignTask = (task, member) => {
-          if (!isLeader) return;
-          if (state.tasks.filter(t => t.team === team && t.tile === task.tile && t.role === 'Weapons').length >= task.cap) {
-            addMessage(`Task cap reached for ${task.tile}`);
-            return;
-          }
-          setState(prev => ({
-            ...prev,
-            tasks: [...prev.tasks, { team, role: 'Weapons', tile: task.tile, task: task.task, points: task.points, xp: task.xp, member, status: 'Assigned' }]
-          }));
-          addMessage(`Assigned ${task.task} to ${member}`);
-        };
-
-        const completeTask = (task) => {
-          if (isLeader || task.member !== playerId) return;
-          setState(prev => {
-            const newTasks = prev.tasks.map(t => t.task === task.task && t.member === playerId ? { ...t, status: 'Completed' } : t);
-            const teamState = prev.teams[team] || initialState.teams[team];
-            const points = task.points * (teamState.weaponsLevel >= 8 ? 2 : teamState.weaponsLevel >= 5 ? 1.5 : 1);
-            const newPoints = teamState.points + points;
-            const newXP = teamState.xp + task.xp;
-            const tilePoints = newTasks.filter(t => t.team === team && t.tile === task.tile && t.status === 'Completed').reduce((sum, t) => sum + t.points, 0);
-            const tilesCleared = tilePoints >= 50 ? teamState.tilesCleared + 1 : teamState.tilesCleared; // Generic points threshold
-            const newTiles = tilePoints >= 50 ? { ...tiles, [task.tile]: { ...tiles[task.tile], status: 'Cleared' } } : tiles;
-            return {
-              ...prev,
-              tasks: newTasks,
-              teams: {
-                ...prev.teams,
-                [team]: { ...teamState, points: newPoints, xp: newXP, tilesCleared }
-              },
-              players: {
-                ...prev.players,
-                [playerId]: { ...prev.players[playerId], points: (prev.players[playerId]?.points || 0) + points }
-              }
-            };
-          });
-          addMessage(`${task.task} completed by ${playerId}`);
-        };
-
-        return (
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Weapons Officers Dashboard</h2>
-            <table className="w-full mb-4 border">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-2">Sector</th>
-                  <th className="p-2">Task</th>
-                  <th className="p-2">Points</th>
-                  <th className="p-2">XP</th>
-                  <th className="p-2">Member</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.tasks.filter(t => t.team === team && t.role === 'Weapons').map((task, idx) => (
-                  <tr key={idx} className="border-b">
-                    <td className="p-2">{task.tile}</td>
-                    <td className="p-2">{task.task}</td>
-                    <td className="p-2">{task.points}</td>
-                    <td className="p-2">{task.xp}</td>
-                    <td className="p-2">{task.member}</td>
-                    <td className="p-2">{task.status}</td>
-                    <td className="p-2">
-                      {!isLeader && task.member === playerId && task.status === 'Assigned' && (
-                        <button className="px-2 py-1 bg-green-500 text-white rounded" onClick={() => completeTask(task)}>Complete</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {isLeader && (
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold">Assign Task</h3>
-                <select className="p-2 border rounded mr-2 z-50" onChange={(e) => {
-                  const task = taskList.find(t => t.task === e.target.value && t.type === 'boss');
-                  if (task) assignTask(task, `Player${Math.floor(Math.random() * 15) + 1}`);
-                }}>
-                  <option>Select Task</option>
-                  {taskList.filter(t => t.type === 'boss').map(t => (
-                    <option key={t.task} value={t.task}>{t.task} ({t.tile})</option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // Detection Officer Dashboard
-      function DetectionOfficerDashboard() {
-        const assignTask = (task, member) => {
-          if (!isLeader) return;
-          if (state.tasks.filter(t => t.team === team && t.tile === task.tile && t.role === 'Detection').length >= task.cap) {
-            addMessage(`Task cap reached for ${task.tile}`);
-            return;
-          }
-          setState(prev => ({
-            ...prev,
-            tasks: [...prev.tasks, { team, role: 'Detection', tile: task.tile, task: task.task, points: task.points, xp: task.xp, member, status: 'Assigned' }]
-          }));
-          addMessage(`Assigned ${task.task} to ${member}`);
-        };
-
-        const completeTask = (task) => {
-          if (isLeader || task.member !== playerId) return;
-          setState(prev => {
-            const newTasks = prev.tasks.map(t => t.task === task.task && t.member === playerId ? { ...t, status: 'Completed' } : t);
-            const teamState = prev.teams[team] || initialState.teams[team];
-            const points = task.points;
-            const newPoints = teamState.points + points;
-            const newXP = teamState.xp + task.xp;
-            const tilePoints = newTasks.filter(t => t.team === team && t.tile === task.tile && t.status === 'Completed').reduce((sum, t) => sum + t.points, 0);
-            const tilesCleared = tilePoints >= 50 ? teamState.tilesCleared + 1 : teamState.tilesCleared;
-            const newTiles = tilePoints >= 50 ? { ...tiles, [task.tile]: { ...tiles[task.tile], status: 'Cleared' } } : tiles;
-            return {
-              ...prev,
-              tasks: newTasks,
-              teams: {
-                ...prev.teams,
-                [team]: { ...teamState, points: newPoints, xp: newXP, tilesCleared }
-              },
-              players: {
-                ...prev.players,
-                [playerId]: { ...prev.players[playerId], points: (prev.players[playerId]?.points || 0) + points }
-              }
-            };
-          });
-          addMessage(`${task.task} completed by ${playerId}`);
-        };
-
-        const scan = () => {
-          if (!isLeader) return;
-          const scanCost = state.teams[team]?.detectionLevel >= 8 ? 2000 : state.teams[team]?.detectionLevel >= 5 ? 5000 : 10000;
-          const stealthReduction = state.teams[team]?.stealthLevel >= 8 ? 5000 : state.teams[team]?.stealthLevel >= 5 ? 3000 : 0;
-          const finalCost = Math.max(0, scanCost - stealthReduction);
-          if (state.teams[team]?.xp >= finalCost) {
-            const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
-            setState(prev => ({
-              ...prev,
-              teams: {
-                ...prev.teams,
-                [team]: { ...prev.teams[team], xp: prev.teams[team].xp - finalCost, enemyPosition: prev.teams[otherTeam]?.position }
-              }
-            }));
-            addMessage(`Scanned ${otherTeam} at ${tiles[state.teams[otherTeam]?.position]?.sector || 'unknown'} (${finalCost} XP)`);
-          } else {
-            addMessage('Not enough XP to scan!');
-          }
-        };
-
-        return (
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Detection Officers Dashboard</h2>
-            <table className="w-full mb-4 border">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-2">Sector</th>
-                  <th className="p-2">Task</th>
-                  <th className="p-2">Points</th>
-                  <th className="p-2">XP</th>
-                  <th className="p-2">Member</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.tasks.filter(t => t.team === team && t.role === 'Detection').map((task, idx) => (
-                  <tr key={idx} className="border-b">
-                    <td className="p-2">{task.tile}</td>
-                    <td className="p-2">{task.task}</td>
-                    <td className="p-2">{task.points}</td>
-                    <td className="p-2">{task.xp}</td>
-                    <td className="p-2">{task.member}</td>
-                    <td className="p-2">{task.status}</td>
-                    <td className="p-2">
-                      {!isLeader && task.member === playerId && task.status === 'Assigned' && (
-                        <button className="px-2 py-1 bg-green-500 text-white rounded" onClick={() => completeTask(task)}>Complete</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {isLeader && (
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold">Assign Task</h3>
-                <select className="p-2 border rounded mr-2 z-50" onChange={(e) => {
-                  const task = taskList.find(t => t.task === e.target.value && t.type === 'non-boss');
-                  if (task) assignTask(task, `Player${Math.floor(Math.random() * 15) + 1}`);
-                }}>
-                  <option>Select Task</option>
-                  {taskList.filter(t => t.type === 'non-boss').map(t => (
-                    <option key={t.task} value={t.task}>{t.task} ({t.tile})</option>
-                  ))}
-                </select>
-                <button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={scan}>Scan</button>
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // Systems Management Dashboard
-      function SystemsManagementDashboard() {
-        const [selectedDrop, setSelectedDrop] = useState('');
-        const [manualXP, setManualXP] = useState('');
-        const [systemToIncrement, setSystemToIncrement] = useState('Weapons');
-
-        const submitXPandDrop = () => {
-          if (!isLeader) return;
-          let xp = parseInt(manualXP, 10) || 0;
-          let points = 0;
-          let stealthPoints = 0;
-          const drop = taskList.find(t => t.task === selectedDrop);
-
-          if (drop) {
-            xp += drop.xp;
-            points = drop.points;
-            if (drop.tile === 'B5' || drop.tile === 'D5') {
-              stealthPoints = 1;
-            }
-          }
-
-          if (xp <= 0 && !drop) {
-            addMessage('Invalid XP or drop selection.');
-            return;
-          }
-
-          setState(prev => {
-            const teamState = prev.teams[team] || initialState.teams[team];
-            const newXP = teamState.xp + xp;
-            const newPoints = teamState.points + points;
-            const newStealthPoints = teamState.stealthPoints + stealthPoints;
-            let newWeaponsLevel = teamState.weaponsLevel;
-            let newDetectionLevel = teamState.detectionLevel;
-            let newStealthLevel = teamState.stealthLevel;
-
-            if (newXP >= teamState.xp + 10000) {
-              if (systemToIncrement === 'Weapons') newWeaponsLevel = Math.min(10, newWeaponsLevel + 1);
-              else if (systemToIncrement === 'Detection') newDetectionLevel = Math.min(10, newDetectionLevel + 1);
-              else if (systemToIncrement === 'Stealth') newStealthLevel = Math.min(10, newStealthLevel + 1);
-            }
-
-            return {
-              ...prev,
-              teams: {
-                ...prev.teams,
-                [team]: {
-                  ...teamState,
-                  xp: newXP,
-                  points: newPoints,
-                  stealthPoints: newStealthPoints,
-                  weaponsLevel: newWeaponsLevel,
-                  detectionLevel: newDetectionLevel,
-                  stealthLevel: newStealthLevel
-                }
-              },
-              players: {
-                ...prev.players,
-                [playerId]: { ...prev.players[playerId], points: (prev.players[playerId]?.points || 0) + points }
-              }
-            };
-          });
-
-          addMessage(`Added ${xp} XP, ${points} points, ${stealthPoints} stealth points. System: ${systemToIncrement}`);
-          setSelectedDrop('');
-          setManualXP('');
-        };
-
-        const logPenalty = () => {
-          if (!isLeader) return;
-          setState(prev => {
-            const teamState = prev.teams[team] || initialState.teams[team];
-            const newHealth = Math.max(0, teamState.health - 1);
-            let newTeams = { ...prev.teams, [team]: { ...teamState, health: newHealth } };
-            if (newHealth === 0) {
-              newTeams[team] = {
-                ...newTeams[team],
-                health: 15,
-                weaponsLevel: 0,
-                detectionLevel: 0,
-                stealthLevel: 0,
-                stealthPoints: 0
-              };
-              addMessage(`${team} repaired: Health 15, systems reset.`);
-            } else {
-              addMessage(`Penalty logged: ${team} health -1`);
-            }
-            return { ...prev, teams: newTeams };
-          });
-        };
-
-        const suggestAction = () => {
-          if (isLeader) return;
-          addMessage(`Suggested system action by ${playerId}`);
-        };
-
-        return (
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Systems Management Dashboard</h2>
-            <table className="w-full mb-4 border">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-2">Health</th>
-                  <th className="p-2">Weapons Level</th>
-                  <th className="p-2">Detection Level</th>
-                  <th className="p-2">Stealth Level</th>
-                  <th className="p-2">Stealth Points</th>
-                  <th className="p-2">Total XP</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="p-2">{state.teams[team]?.health || 20}</td>
-                  <td className="p-2">{state.teams[team]?.weaponsLevel || 0}</td>
-                  <td className="p-2">{state.teams[team]?.detectionLevel || 0}</td>
-                  <td className="p-2">{state.teams[team]?.stealthLevel || 0}</td>
-                  <td className="p-2">{state.teams[team]?.stealthPoints || 0}</td>
-                  <td className="p-2">{state.teams[team]?.xp || 0}</td>
-                </tr>
-              </tbody>
-            </table>
-            {isLeader && (
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold">Input XP and Drops</h3>
-                <div className="flex space-x-4 mb-2">
-                  <select
-                    className="p-2 border rounded z-50"
-                    value={selectedDrop}
-                    onChange={(e) => setSelectedDrop(e.target.value)}
-                  >
-                    <option value="">Select Drop</option>
-                    {taskList.map(t => (
-                      <option key={t.task} value={t.task}>{t.task} ({t.tile})</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    className="p-2 border rounded"
-                    value={manualXP}
-                    onChange={(e) => setManualXP(e.target.value)}
-                    placeholder="Manual XP"
-                    min="0"
-                  />
-                  <select
-                    className="p-2 border rounded z-50"
-                    value={systemToIncrement}
-                    onChange={(e) => setSystemToIncrement(e.target.value)}
-                  >
-                    <option>Weapons</option>
-                    <option>Detection</option>
-                    <option>Stealth</option>
-                  </select>
-                  <button
-                    className="px-4 py-2 bg-blue-500 text-white rounded"
-                    onClick={submitXPandDrop}
-                  >
-                    Submit
-                  </button>
-                </div>
-                <button
-                  className="px-4 py-2 bg-red-500 text-white rounded mr-2"
-                  onClick={logPenalty}
-                >
-                  Log Penalty
-                </button>
-                {state.teams[team]?.health === 0 && (
-                  <button
-                    className="px-4 py-2 bg-yellow-500 text-white rounded"
-                    onClick={() => logPenalty()}
-                  >
-                    Initiate Repair
-                  </button>
-                )}
-              </div>
-            )}
-            {!isLeader && (
-              <button
-                className="px-4 py-2 bg-gray-500 text-white rounded"
-                onClick={suggestAction}
-              >
-                Suggest Action
-              </button>
-            )}
-          </div>
-        );
-      }
-
-      // Render Role Dashboard
-      const renderDashboard = () => {
-        switch (role) {
-          case 'Captain': return <CaptainDashboard />;
-          case 'Weapons': return <WeaponsOfficerDashboard />;
-          case 'Detection': return <DetectionOfficerDashboard />;
-          case 'Systems': return <SystemsManagementDashboard />;
-          default: return <div>Invalid role selected</div>;
-        }
+        return grid;
       };
-
-      console.log('Rendering App...');
 
       return (
-        <ErrorBoundary>
-          <div className="container mx-auto p-4">
-            <h1 className="text-3xl font-bold mb-4">SONARScape Role Interface</h1>
-            <RoleSelector />
-            <TimerDisplay />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>{renderDashboard()}</div>
-              <div>
-                <ChatBox />
-                <Scoreboard />
-              </div>
-            </div>
+        <div class="bg-gray-700 p-4 rounded-lg shadow-lg">
+          <h3 class="text-lg font-bold mb-2">{team} Captain</h3>
+          <div class="mb-4">{renderGrid()}</div>
+          <div class="flex space-x-2">
+            <button onClick={() => move('N')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">North</button>
+            <button onClick={() => move('S')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">South</button>
+            <button onClick={() => move('E')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">East</button>
+            <button onClick={() => move('W')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">West</button>
+            <button class="p-2 bg-red-600 rounded hover:bg-red-700">Torpedo</button>
+            <button class="p-2 bg-yellow-600 rounded hover:bg-yellow-700">Drone</button>
           </div>
-        </ErrorBoundary>
+        </div>
       );
-    }
-
-    // Render App
-    try {
-      const root = document.getElementById('root');
-      if (!root) {
-        console.error('Root element not found');
-        document.body.innerHTML = '<h1>Error: Root element not found. Check HTML structure.</h1>';
-      } else {
-        ReactDOM.render(<App />, root);
-        console.log('App rendered successfully');
-      }
-    } catch (error) {
-      console.error('Failed to render App:', error);
-      document.body.innerHTML = `<h1>Error: Failed to render app. ${error.message}</h1>`;
-    }
-  </script>
-</body>
-</html>
-
-    // Game State
-    const initialState = {
-      teams: {
-        Trident: { xp: 0, points: 0, tilesCleared: 0, position: 'A1', health: 20, weaponsLevel: 0, detectionLevel: 0, stealthLevel: 0, stealthPoints: 0, moveLog: [], lastMove: null, lastPosition: 'A1', enemyPosition: null },
-        Harpoon: { xp: 0, points: 0, tilesCleared: 0, position: 'E4', health: 20, weaponsLevel: 0, detectionLevel: 0, stealthLevel: Gabrielle's Song
-      },
-      tasks: [],
-      players: {},
-      timer: { minutes: 10, seconds: 0 },
-      messages: []
     };
 
-    // Task List
-    const taskList = [
-      { tile: 'Abyssal Sire', task: 'Bludgeon piece', points: 10, xp: 5000, type: 'boss', cap: 3 },
-      { tile: 'Abyssal Sire', task: 'Orphan pet', points: 25, xp: 10000, type: 'boss', cap: 3 },
-      { tile: 'Abyssal Sire', task: 'Unsired', points: 5, xp: 5000, type: 'boss', cap: 3 },
-      { tile: 'Theatre of Blood', task: 'Avernic hilt', points: 30, xp: 10000, type: 'boss', cap: 3 },
-      { tile: 'Theatre of Blood', task: 'Sanguinesti staff', points: 40, xp: 10000, type: 'boss', cap: 3 },
-      { tile: 'Misc. Tasks', task: 'Champion Scroll', points: 10, xp: 5000, type: 'non-boss', cap: 3 },
-      { tile: 'Callisto', task: 'Dragon pickaxe', points: 15, xp: 10000, type: 'non-boss', cap: 2 },
-      { tile: 'Callisto', task: 'Bear pet', points: 25, xp: 10000, type: 'non-boss', cap: 2 }
-    ];
+    // First Mate Interface (weapon/system trackers)
+    const FirstMateInterface = ({ team }) => {
+      const [systems, setSystems] = useState({
+        torpedo: 0,
+        drone: 0,
+        sonar: 0,
+      });
 
-    // Tiles
-    const tiles = {
-      'A1': { name: 'Abyssal Sire', points: 50 }, 'A2': { name: 'Chambers of Xeric', points: 100 },
-      'A3': { name: 'Leviathan', points: 60 }, 'A4': { name: 'Theatre of Blood', points: 150 },
-      'A5': { name: 'Misc. Tasks', points: 40 }, 'B1': { name: 'Duke Sucellus', points: 60 },
-      'B2': { name: 'General Graardor', points: 80 }, 'B3': { name: 'Zulrah', points: 70 },
-      'B4': { name: 'Whisperer', points: 80 }, 'B5': { name: 'Callisto', points: 50 },
-      'C1': { name: 'Kraken', points: 50 }, 'C2': { name: 'Tombs of Amascut', points: 120 },
-      'C3': { name: 'Vardorvis', points: 60 }, 'C4': { name: 'Kree\'arra', points: 80 },
-      'C5': { name: 'Barrows Brothers', points: 40 }, 'D1': { name: 'Cerberus', points: 60 },
-      'D2': { name: 'Phantom Muspah', points: 70 }, 'D3': { name: 'Alchemical Hydra', points: 70 },
-      'D4': { name: 'Nex', points: 100 }, 'D5': { name: 'Venenatis', points: 50 },
-      'E1': { name: 'Gauntlet', points: 60 }, 'E2': { name: 'Corporeal Beast', points: 80 },
-      'E3': { name: 'K\'ril Tsutsaroth', points: 80 }, 'E4': { name: 'Sarachnis', points: 40 },
-      'E5': { name: 'Kraken Prime', points: 400 }
-    };
-
-    // Main App Component
-    function App() {
-      const [state, setState] = useState(initialState);
-      const [team, setTeam] = useState('Trident');
-      const [role, setRole] = useState('Captain');
-      const [isLeader, setIsLeader] = useState(true);
-      const [playerId, setPlayerId] = useState('Player1');
-
-      // Timer Logic (Execution only)
-      useEffect(() => {
-        const interval = setInterval(() => {
-          setState(prev => {
-            let { minutes, seconds } = prev.timer;
-            seconds--;
-            if (seconds < 0) {
-              seconds = 59;
-              minutes--;
-            }
-            if (minutes === 0 && seconds === 0) {
-              minutes = 10;
-              seconds = 0;
-            }
-            return { ...prev, timer: { minutes, seconds } };
-          });
-        }, 1000);
-        return () => clearInterval(interval);
-      }, []);
-
-      // Save state to localStorage
-      useEffect(() => {
-        localStorage.setItem('gameState', JSON.stringify(state));
-      }, [state]);
-
-      // Load state from localStorage
-      useEffect(() => {
-        const savedState = localStorage.getItem('gameState');
-        if (savedState) setState(JSON.parse(savedState));
-      }, []);
-
-      // Add Message
-      const addMessage = (message) => {
-        setState(prev => ({ ...prev, messages: [...prev.messages, { team, role, playerId, message, time: new Date().toLocaleTimeString() }] }));
+      const incrementSystem = (system) => {
+        setSystems((prev) => ({
+          ...prev,
+          [system]: Math.min(prev[system] + 1, 3),
+        }));
       };
-
-      // Error Boundary
-      class ErrorBoundary extends React.Component {
-        state = { hasError: false };
-        static getDerivedStateFromError() { return { hasError: true }; }
-        render() {
-          if (this.state.hasError) return <h1>Something went wrong. Refresh the page.</h1>;
-          return this.props.children;
-        }
-      }
-
-      // Role Selector
-      const RoleSelector = () => (
-        <div className="p-4 bg-white rounded shadow mb-4 relative z-50">
-          <h2 className="text-xl font-bold mb-2">Select Role</h2>
-          <div className="flex space-x-4">
-            <select className="p-2 border rounded z-50" value={team} onChange={(e) => setTeam(e.target.value)}>
-              <option>Trident</option>
-              <option>Harpoon</option>
-            </select>
-            <select className="p-2 border rounded z-50" value={role} onChange={(e) => setRole(e.target.value)}>
-              <option>Captain</option>
-              <option>Weapons</option>
-              <option>Detection</option>
-              <option>Systems</option>
-            </select>
-            <input
-              type="text"
-              className="p-2 border rounded"
-              value={playerId}
-              onChange={(e) => setPlayerId(e.target.value)}
-              placeholder="Enter Player ID"
-            />
-            <label className="flex items-center">
-              <input type="checkbox" checked={isLeader} onChange={(e) => setIsLeader(e.target.checked)} className="mr-2" />
-              Is Leader?
-            </label>
-          </div>
-        </div>
-      );
-
-      // Timer Display
-      const TimerDisplay = () => (
-        <div className="p-4 bg-white rounded shadow mb-4">
-          <h2 className="text-xl font-bold">Timer</h2>
-          <p>{state.timer.minutes}:{state.timer.seconds < 10 ? '0' : ''}{state.timer.seconds}</p>
-        </div>
-      );
-
-      // Chat Box
-      const ChatBox = () => (
-        <div className="p-4 bg-white rounded shadow mb-4">
-          <h2 className="text-xl font-bold mb-2">Chat</h2>
-          <div className="h-40 overflow-y-scroll border p-2 mb-2">
-            {state.messages.map((msg, idx) => (
-              <p key={idx}>{msg.time} [{msg.team} {msg.role} {msg.playerId}]: {msg.message}</p>
-            ))}
-          </div>
-          <input
-            type="text"
-            className="p-2 border rounded w-full"
-            placeholder="Type message..."
-            onKeyPress={(e) => {
-              if (e.key === 'Enter' && e.target.value) {
-                addMessage(e.target.value);
-                e.target.value = '';
-              }
-            }}
-          />
-        </div>
-      );
-
-      // Scoreboard
-      const Scoreboard = () => (
-        <div className="p-4 bg-white rounded shadow mb-4">
-          <h2 className="text-xl font-bold mb-2">Scoreboard</h2>
-          <p>{team} Points: {state.teams[team].points}</p>
-          <p>Tiles Cleared: {state.teams[team].tilesCleared}</p>
-          <h3 className="font-semibold mt-2">Player Scores</h3>
-          {Object.entries(state.players).map(([id, data]) => (
-            <p key={id}>{id}: {data.points} points</p>
-          ))}
-        </div>
-      );
-
-      // Captain Dashboard
-      function CaptainDashboard() {
-        const canvasRef = useRef(null);
-
-        useEffect(() => {
-          const canvas = canvasRef.current;
-          const ctx = canvas.getContext('2d');
-          const cellSize = 80;
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-          // Draw grid
-          ctx.strokeStyle = '#000';
-          ctx.fillStyle = '#1e3a8a';
-          ctx.fillRect(0, 0, 5 * cellSize, 5 * cellSize);
-          for (let i = 0; i <= 5; i++) {
-            ctx.beginPath();
-            ctx.moveTo(i * cellSize, 0);
-            ctx.lineTo(i * cellSize, 5 * cellSize);
-            ctx.moveTo(0, i * cellSize);
-            ctx.lineTo(5 * cellSize, i * cellSize);
-            ctx.stroke();
-          }
-
-          // Draw tile names and status
-          Object.keys(tiles).forEach(tile => {
-            const row = tile.charCodeAt(0) - 65;
-            const col = parseInt(tile[1]) - 1;
-            ctx.fillStyle = tiles[tile].status === 'Cleared' ? '#22c55e' : '#1e3a8a';
-            ctx.fillRect(col * cellSize + 1, row * cellSize + 1, cellSize - 2, cellSize - 2);
-            ctx.fillStyle = '#fff';
-            ctx.font = '12px Arial';
-            ctx.textAlign = 'center';
-            ctx.fillText(tiles[tile].name, col * cellSize + cellSize / 2, row * cellSize + cellSize / 2);
-            ctx.fillText(tile, col * cellSize + cellSize / 2, row * cellSize + 20);
-          });
-
-          // Draw path
-          ctx.strokeStyle = team === 'Trident' ? '#3b82f6' : '#ef4444';
-          ctx.lineWidth = 3;
-          ctx.beginPath();
-          state.teams[team].moveLog.forEach((move, idx) => {
-            const [row, col] = [move.tile.charCodeAt(0) - 65, parseInt(move.tile[1]) - 1];
-            if (idx === 0) ctx.moveTo(col * cellSize + cellSize / 2, row * cellSize + cellSize / 2);
-            else ctx.lineTo(col * cellSize + cellSize / 2, row * cellSize + cellSize / 2);
-          });
-          ctx.stroke();
-
-          // Highlight current position
-          const [currentRow, currentCol] = [state.teams[team].position.charCodeAt(0) - 65, parseInt(state.teams[team].position[1]) - 1];
-          ctx.fillStyle = team === 'Trident' ? 'rgba(59, 130, 246, 0.5)' : 'rgba(239, 68, 68, 0.5)';
-          ctx.fillRect(currentCol * cellSize + 1, currentRow * cellSize + 1, cellSize - 2, cellSize - 2);
-
-          // Highlight enemy position (if scanned)
-          if (state.teams[team].enemyPosition) {
-            const [enemyRow, enemyCol] = [state.teams[team].enemyPosition.charCodeAt(0) - 65, parseInt(state.teams[team].enemyPosition[1]) - 1];
-            ctx.strokeStyle = 'rgba(255, 0, 0, 0.5)';
-            ctx.lineWidth = 5;
-            ctx.strokeRect(enemyCol * cellSize + 3, enemyRow * cellSize + 3, cellSize - 6, cellSize - 6);
-          }
-        }, [state.teams[team].position, state.teams[team].moveLog, state.teams[team].enemyPosition]);
-
-        const move = (tile) => {
-          if (!isLeader) return;
-          const currentTile = state.teams[team].position;
-          const [currentRow, currentCol] = [currentTile.charCodeAt(0) - 65, parseInt(currentTile[1])];
-          const [newRow, newCol] = [tile.charCodeAt(0) - 65, parseInt(tile[1])];
-          if (Math.abs(newRow - currentRow) + Math.abs(newCol - currentCol) !== 1 || tiles[tile].status === 'Cleared') {
-            addMessage('Invalid move: Must be adjacent and not cleared.');
-            return;
-          }
-
-          let xpCost = 20000;
-          const lastMove = state.teams[team].lastMove;
-          const direction = newRow < currentRow ? 'N' : newRow > currentRow ? 'S' : newCol > currentCol ? 'E' : 'W';
-          if (lastMove === direction) xpCost -= 5000;
-
-          if (state.teams[team].xp >= xpCost) {
-            const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
-            if (state.teams[otherTeam].position === tile) {
-              addMessage(`Conflict at ${tile}! Use Stop! to resolve.`);
-              return;
-            }
-            setState(prev => ({
-              ...prev,
-              teams: {
-                ...prev.teams,
-                [team]: {
-                  ...prev.teams[team],
-                  position: tile,
-                  xp: prev.teams[team].xp - xpCost,
-                  lastMove: direction,
-                  lastPosition: currentTile,
-                  moveLog: [...prev.teams[team].moveLog, { tile, direction, xp: xpCost, time: new Date().toLocaleTimeString() }]
-                }
-              }
-            }));
-            addMessage(`Moved ${direction} to ${tiles[tile].name} (${xpCost} XP)`);
-          } else {
-            addMessage('Not enough XP to move!');
-          }
-        };
-
-        const stop = () => {
-          if (!isLeader) return;
-          const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
-          const currentTile = state.teams[team].position;
-          if (state.teams[otherTeam].position === currentTile) {
-            const teamXP = state.teams[team].xp;
-            const otherXP = state.teams[otherTeam].xp;
-            if (teamXP > otherXP) {
-              setState(prev => ({
-                ...prev,
-                teams: {
-                  ...prev.teams,
-                  [otherTeam]: { ...prev.teams[otherTeam], position: prev.teams[otherTeam].lastPosition }
-                }
-              }));
-              addMessage(`Stop! ${team} wins tile ${currentTile}.`);
-            } else {
-              setState(prev => ({
-                ...prev,
-                teams: {
-                  ...prev.teams,
-                  [team]: { ...prev.teams[team], position: prev.teams[team].lastPosition }
-                }
-              }));
-              addMessage(`Stop! ${otherTeam} wins tile ${currentTile}.`);
-            }
-          }
-        };
-
-        const suggestMove = (direction) => {
-          if (isLeader) return;
-          addMessage(`Suggested move: ${direction}`);
-        };
-
-        return (
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Captains Dashboard</h2>
-            <canvas ref={canvasRef} width={400} height={400} className="mb-4 border" onClick={(e) => {
-              if (!isLeader) return;
-              const rect = canvasRef.current.getBoundingClientRect();
-              const x = e.clientX - rect.left;
-              const y = e.clientY - rect.top;
-              const cellSize = 80;
-              const col = Math.floor(x / cellSize) + 1;
-              const row = String.fromCharCode(65 + Math.floor(y / cellSize));
-              const tile = `${row}${col}`;
-              if (tiles[tile]) move(tile);
-            }} />
-            <div className="flex space-x-2 mb-4">
-              {isLeader && (
-                <button className="px-4 py-2 bg-red-500 text-white rounded" onClick={stop}>Stop!</button>
-              )}
-              {!isLeader && (
-                <>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('North')}>Suggest North</button>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('South')}>Suggest South</button>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('East')}>Suggest East</button>
-                  <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={() => suggestMove('West')}>Suggest West</button>
-                </>
-              )}
-            </div>
-            <p>Team XP: {state.teams[team].xp}</p>
-            <h3 className="text-lg font-semibold mt-4">Move Log</h3>
-            <div className="h-40 overflow-y-scroll border">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-gray-200">
-                    <th className="p-2">Direction</th>
-                    <th className="p-2">Tile</th>
-                    <th className="p-2">XP</th>
-                    <th className="p-2">Time</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {state.teams[team].moveLog.map((move, idx) => (
-                    <tr key={idx} className="border-b">
-                      <td className="p-2">{move.direction}</td>
-                      <td className="p-2">{tiles[move.tile].name}</td>
-                      <td className="p-2">{move.xp}</td>
-                      <td className="p-2">{move.time}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      }
-
-      // Weapons Officer Dashboard
-      function WeaponsOfficerDashboard() {
-        const assignTask = (task, member) => {
-          if (!isLeader) return;
-          if (state.tasks.filter(t => t.team === team && t.tile === task.tile && t.role === 'Weapons').length >= task.cap) {
-            addMessage(`Task cap reached for ${task.tile}`);
-            return;
-          }
-          setState(prev => ({
-            ...prev,
-            tasks: [...prev.tasks, { team, role: 'Weapons', tile: task.tile, task: task.task, points: task.points, xp: task.xp, member, status: 'Assigned' }]
-          }));
-          addMessage(`Assigned ${task.task} to ${member}`);
-        };
-
-        const completeTask = (task) => {
-          if (isLeader || task.member !== playerId) return;
-          setState(prev => {
-            const newTasks = prev.tasks.map(t => t.task === task.task && t.member === playerId ? { ...t, status: 'Completed' } : t);
-            const teamState = prev.teams[team];
-            const points = task.points * (teamState.weaponsLevel >= 8 ? 2 : teamState.weaponsLevel >= 5 ? 1.5 : 1);
-            const newPoints = teamState.points + points;
-            const newXP = teamState.xp + task.xp;
-            const tilePoints = newTasks.filter(t => t.team === team && t.tile === task.tile && t.status === 'Completed').reduce((sum, t) => sum + t.points, 0);
-            const tilesCleared = tilePoints >= tiles[task.tile].points ? teamState.tilesCleared + 1 : teamState.tilesCleared;
-            const newTileStatus = tilePoints >= tiles[task.tile].points ? { ...tiles, [task.tile]: { ...tiles[task.tile], status: 'Cleared' } }PresetState(prev => ({
-              ...prev,
-              tasks: newTasks,
-              teams: {
-                ...prev.teams,
-                [team]: { ...teamState, points: newPoints, xp: newXP, tilesCleared }
-              },
-              players: {
-                ...prev.players,
-                [playerId]: { ...prev.players[playerId], points: (prev.players[playerId]?.points || 0) + points }
-              }
-            }));
-            addMessage(`${task.task} completed by ${playerId}`);
-          });
-        };
-
-        return (
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Weapons Officers Dashboard</h2>
-            <table className="w-full mb-4 border">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-2">Tile</th>
-                  <th className="p-2">Task</th>
-                  <th className="p-2">Points</th>
-                  <th className="p-2">XP</th>
-                  <th className="p-2">Member</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.tasks.filter(t => t.team === team && t.role === 'Weapons').map((task, idx) => (
-                  <tr key={idx} className="border-b">
-                    <td className="p-2">{task.tile}</td>
-                    <td className="p-2">{task.task}</td>
-                    <td className="p-2">{task.points}</td>
-                    <td className="p-2">{task.xp}</td>
-                    <td className="p-2">{task.member}</td>
-                    <td className="p-2">{task.status}</td>
-                    <td className="p-2">
-                      {!isLeader && task.member === playerId && task.status === 'Assigned' && (
-                        <button className="px-2 py-1 bg-green-500 text-white rounded" onClick={() => completeTask(task)}>Complete</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {isLeader && (
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold">Assign Task</h3>
-                <select className="p-2 border rounded mr-2 z-50" onChange={(e) => {
-                  const task = taskList.find(t => t.task === e.target.value && t.type === 'boss');
-                  if (task) assignTask(task, `Player${Math.floor(Math.random() * 15) + 1}`);
-                }}>
-                  <option>Select Task</option>
-                  {taskList.filter(t => t.type === 'boss').map(t => (
-                    <option key={t.task} value={t.task}>{t.task} ({t.tile})</option>
-                  ))}
-                </select>
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // Detection Officer Dashboard
-      function DetectionOfficerDashboard() {
-        const assignTask = (task, member) => {
-          if (!isLeader) return;
-          if (state.tasks.filter(t => t.team === team && t.tile === task.tile && t.role === 'Detection').length >= task.cap) {
-            addMessage(`Task cap reached for ${task.tile}`);
-            return;
-          }
-          setState(prev => ({
-            ...prev,
-            tasks: [...prev.tasks, { team, role: 'Detection', tile: task.tile, task: task.task, points: task.points, xp: task.xp, member, status: 'Assigned' }]
-          }));
-          addMessage(`Assigned ${task.task} to ${member}`);
-        };
-
-        const completeTask = (task) => {
-          if (isLeader || task.member !== playerId) return;
-          setState(prev => {
-            const newTasks = prev.tasks.map(t => t.task === task.task && t.member === playerId ? { ...t, status: 'Completed' } : t);
-            const teamState = prev.teams[team];
-            const points = task.points;
-            const newPoints = teamState.points + points;
-            const newXP = teamState.xp + task.xp;
-            const tilePoints = newTasks.filter(t => t.team === team && t.tile === task.tile && t.status === 'Completed').reduce((sum, t) => sum + t.points, 0);
-            const tilesCleared = tilePoints >= tiles[task.tile].points ? teamState.tilesCleared + 1 : teamState.tilesCleared;
-            const newTileStatus = tilePoints >= tiles[task.tile].points ? { ...tiles, [task.tile]: { ...tiles[task.tile], status: 'Cleared' } } : tiles;
-            return {
-              ...prev,
-              tasks: newTasks,
-              teams: {
-                ...prev.teams,
-                [team]: { ...teamState, points: newPoints, xp: newXP, tilesCleared }
-              },
-              players: {
-                ...prev.players,
-                [playerId]: { ...prev.players[playerId], points: (prev.players[playerId]?.points || 0) + points }
-              }
-            };
-          });
-          addMessage(`${task.task} completed by ${playerId}`);
-        };
-
-        const scan = () => {
-          if (!isLeader) return;
-          const scanCost = state.teams[team].detectionLevel >= 8 ? 2000 : state.teams[team].detectionLevel >= 5 ? 5000 : 10000;
-          const stealthReduction = state.teams[team].stealthLevel >= 8 ? 5000 : state.teams[team].stealthLevel >= 5 ? 3000 : 0;
-          const finalCost = Math.max(0, scanCost - stealthReduction);
-          if (state.teams[team].xp >= finalCost) {
-            const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
-            setState(prev => ({
-              ...prev,
-              teams: {
-                ...prev.teams,
-                [team]: { ...prev.teams[team], xp: prev.teams[team].xp - finalCost, enemyPosition: prev.teams[otherTeam].position }
-              }
-            }));
-            addMessage(`Scanned ${otherTeam} at ${tiles[state.teams[otherTeam].position].name} (${finalCost} XP)`);
-          } else {
-            addMessage('Not enough XP to scan!');
-          }
-        };
-
-        return (
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Detection Officers Dashboard</h2>
-            <table className="w-full mb-4 border">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-2">Tile</th>
-                  <th className="p-2">Task</th>
-                  <th className="p-2">Points</th>
-                  <th className="p-2">XP</th>
-                  <th className="p-2">Member</th>
-                  <th className="p-2">Status</th>
-                  <th className="p-2">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {state.tasks.filter(t => t.team === team && t.role === 'Detection').map((task, idx) => (
-                  <tr key={idx} className="border-b">
-                    <td className="p-2">{task.tile}</td>
-                    <td className="p-2">{task.task}</td>
-                    <td className="p-2">{task.points}</td>
-                    <td className="p-2">{task.xp}</td>
-                    <td className="p-2">{task.member}</td>
-                    <td className="p-2">{task.status}</td>
-                    <td className="p-2">
-                      {!isLeader && task.member === playerId && task.status === 'Assigned' && (
-                        <button className="px-2 py-1 bg-green-500 text-white rounded" onClick={() => completeTask(task)}>Complete</button>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-            {isLeader && (
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold">Assign Task</h3>
-                <select className="p-2 border rounded mr-2 z-50" onChange={(e) => {
-                  const task = taskList.find(t => t.task === e.target.value && t.type === 'non-boss');
-                  if (task) assignTask(task, `Player${Math.floor(Math.random() * 15) + 1}`);
-                }}>
-                  <option>Select Task</option>
-                  {taskList.filter(t => t.type === 'non-boss').map(t => (
-                    <option key={t.task} value={t.task}>{t.task} ({t.tile})</option>
-                  ))}
-                </select>
-                <button className="px-4 py-2 bg-blue-500 text-white rounded" onClick={scan}>Scan</button>
-              </div>
-            )}
-          </div>
-        );
-      }
-
-      // Systems Management Dashboard
-      function SystemsManagementDashboard() {
-        const [selectedDrop, setSelectedDrop] = useState('');
-        const [manualXP, setManualXP] = useState('');
-        const [systemToIncrement, setSystemToIncrement] = useState('Weapons');
-
-        const submitXPandDrop = () => {
-          if (!isLeader) return;
-          let xp = parseInt(manualXP) || 0;
-          let points = 0;
-          let stealthPoints = 0;
-          const drop = taskList.find(t => t.task === selectedDrop);
-
-          if (drop) {
-            xp += drop.xp;
-            points = drop.points;
-            if (drop.tile === 'Callisto' || drop.tile === 'Venenatis') {
-              stealthPoints = 1;
-            }
-          }
-
-          if (xp <= 0 && !drop) {
-            addMessage('Invalid XP or drop selection.');
-            return;
-          }
-
-          setState(prev => {
-            const teamState = prev.teams[team];
-            const newXP = teamState.xp + xp;
-            const newPoints = teamState.points + points;
-            const newStealthPoints = teamState.stealthPoints + stealthPoints;
-            let newWeaponsLevel = teamState.weaponsLevel;
-            let newDetectionLevel = teamState.detectionLevel;
-            let newStealthLevel = teamState.stealthLevel;
-
-            if (newXP >= teamState.xp + 10000) {
-              if (systemToIncrement === 'Weapons') newWeaponsLevel = Math.min(10, newWeaponsLevel + 1);
-              else if (systemToIncrement === 'Detection') newDetectionLevel = Math.min(10, newDetectionLevel + 1);
-              else if (systemToIncrement === 'Stealth') newStealthLevel = Math.min(10, newStealthLevel + 1);
-            }
-
-            return {
-              ...prev,
-              teams: {
-                ...prev.teams,
-                [team]: {
-                  ...teamState,
-                  xp: newXP,
-                  points: newPoints,
-                  stealthPoints: newStealthPoints,
-                  weaponsLevel: newWeaponsLevel,
-                  detectionLevel: newDetectionLevel,
-                  stealthLevel: newStealthLevel
-                }
-              },
-              players: {
-                ...prev.players,
-                [playerId]: { ...prev.players[playerId], points: (prev.players[playerId]?.points || 0) + points }
-              }
-            };
-          });
-
-          addMessage(`Added ${xp} XP, ${points} points, ${stealthPoints} stealth points. System: ${systemToIncrement}`);
-          setSelectedDrop('');
-          setManualXP('');
-        };
-
-        const logPenalty = () => {
-          if (!isLeader) return;
-          setState(prev => {
-            const newHealth = Math.max(0, prev.teams[team].health - 1);
-            let newTeams = { ...prev.teams, [team]: { ...prev.teams[team], health: newHealth } };
-            if (newHealth === 0) {
-              newTeams[team] = {
-                ...newTeams[team],
-                health: 15,
-                weaponsLevel: 0,
-                detectionLevel: 0,
-                stealthLevel: 0,
-                stealthPoints: 0
-              };
-              addMessage(`${team} repaired: Health 15, systems reset.`);
-            } else {
-              addMessage(`Penalty logged: ${team} health -1`);
-            }
-            return { ...prev, teams: newTeams };
-          });
-        };
-
-        const suggestAction = () => {
-          if (isLeader) return;
-          addMessage(`Suggested system action by ${playerId}`);
-        };
-
-        return (
-          <div className="p-4 bg-white rounded shadow">
-            <h2 className="text-xl font-bold mb-4">Systems Management Dashboard</h2>
-            <table className="w-full mb-4 border">
-              <thead>
-                <tr className="bg-gray-200">
-                  <th className="p-2">Health</th>
-                  <th className="p-2">Weapons Level</th>
-                  <th className="p-2">Detection Level</th>
-                  <th className="p-2">Stealth Level</th>
-                  <th className="p-2">Stealth Points</th>
-                  <th className="p-2">Total XP</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td className="p-2">{state.teams[team].health}</td>
-                  <td className="p-2">{state.teams[team].weaponsLevel}</td>
-                  <td className="p-2">{state.teams[team].detectionLevel}</td>
-                  <td className="p-2">{state.teams[team].stealthLevel}</td>
-                  <td className="p-2">{state.teams[team].stealthPoints}</td>
-                  <td className="p-2">{state.teams[team].xp}</td>
-                </tr>
-              </tbody>
-            </table>
-            {isLeader && (
-              <div className="mb-4">
-                <h3 className="text-lg font-semibold">Input XP and Drops</h3>
-                <div className="flex space-x-4 mb-2">
-                  <select
-                    className="p-2 border rounded z-50"
-                    value={selectedDrop}
-                    onChange={(e) => setSelectedDrop(e.target.value)}
-                  >
-                    <option value="">Select Drop</option>
-                    {taskList.map(t => (
-                      <option key={t.task} value={t.task}>{t.task} ({t.tile})</option>
-                    ))}
-                  </select>
-                  <input
-                    type="number"
-                    className="p-2 border rounded"
-                    value={manualXP}
-                    onChange={(e) => setManualXP(e.target.value)}
-                    placeholder="Manual XP"
-                  />
-                  <select
-                    className="p-2 border rounded z-50"
-                    value={systemToIncrement}
-                    onChange={(e) => setSystemToIncrement(e.target.value)}
-                  >
-                    <option>Weapons</option>
-                    <option>Detection</option>
-                    <option>Stealth</option>
-                  </select>
-                  <button
-                    className="px-4 py-2 bg-blue-500 text-white rounded"
-                    onClick={submitXPandDrop}
-                  >
-                    Submit
-                  </button>
-                </div>
-                <button
-                  className="px-4 py-2 bg-red-500 text-white rounded mr-2"
-                  onClick={logPenalty}
-                >
-                  Log Penalty
-                </button>
-                {state.teams[team].health === 0 && (
-                  <button
-                    className="px-4 py-2 bg-yellow-500 text-white rounded"
-                    onClick={() => logPenalty()}
-                  >
-                    Initiate Repair
-                  </button>
-                )}
-              </div>
-            )}
-            {!isLeader && (
-              <button
-                className="px-4 py-2 bg-gray-500 text-white rounded"
-                onClick={suggestAction}
-              >
-                Suggest Action
-              </button>
-            )}
-          </div>
-        );
-      }
-
-      // Render Role Dashboard
-      const renderDashboard = () => {
-        switch (role) {
-          case 'Captain': return <CaptainDashboard />;
-          case 'Weapons': return <WeaponsOfficerDashboard />;
-          case 'Detection': return <DetectionOfficerDashboard />;
-          case 'Systems': return <SystemsManagementDashboard />;
-          default: return null;
-        }
-      };
-
-      console.log('Rendering App...'); // Debug log
 
       return (
-        <ErrorBoundary>
-          <div className="container mx-auto p-4">
-            <h1 className="text-3xl font-bold mb-4">SONARScape Role Interface</h1>
-            <RoleSelector />
-            <TimerDisplay />
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>{renderDashboard()}</div>
-              <div>
-                <ChatBox />
-                <Scoreboard />
+        <div class="bg-gray-700 p-4 rounded-lg shadow-lg">
+          <h3 class="text-lg font-bold mb-2">{team} First Mate</h3>
+          <div class="space-y-2">
+            {Object.keys(systems).map((system) => (
+              <div key={system} class="flex items-center">
+                <span class="w-24 capitalize">{system}</span>
+                <div class="flex-1 h-4 bg-gray-600 rounded">
+                  <div
+                    class={`h-full bg-green-600 rounded`}
+                    style={{ width: `${(systems[system] / 3) * 100}%` }}
+                  ></div>
+                </div>
+                <button
+                  onClick={() => incrementSystem(system)}
+                  class="ml-2 p-1 bg-blue-600 rounded hover:bg-blue-700"
+                >
+                  +
+                </button>
               </div>
-            </div>
+            ))}
           </div>
-        </ErrorBoundary>
+        </div>
       );
-    }
+    };
 
-    // Render App
-    try {
-      ReactDOM.render(<App />, document.getElementById('root'));
-      console.log('App rendered successfully');
-    } catch (error) {
-      console.error('Failed to render App:', error);
-    }
+    // Engineer Interface (system damage/repair checkboxes)
+    const EngineerInterface = ({ team }) => {
+      const [systems, setSystems] = useState({
+        reactor: false,
+        weapons: false,
+        engines: false,
+        systems: false,
+      });
+
+      const toggleSystem = (system) => {
+        setSystems((prev) => ({
+          ...prev,
+          [system]: !prev[system],
+        }));
+      };
+
+      return (
+        <div class="bg-gray-700 p-4 rounded-lg shadow-lg">
+          <h3 class="text-lg font-bold mb-2">{team} Engineer</h3>
+          <div class="grid grid-cols-2 gap-2">
+            {Object.keys(systems).map((system) => (
+              <label key={system} class="flex items-center">
+                <input
+                  type="checkbox"
+                  checked={systems[system]}
+                  onChange={() => toggleSystem(system)}
+                  class="mr-2"
+                />
+                <span class="capitalize">{system}</span>
+              </label>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    // Radio Operator Interface (tracking enemy movements)
+    const RadioOperatorInterface = ({ team }) => {
+      const [enemyMoves, setEnemyMoves] = useState([]);
+
+      const addMove = (move) => {
+        setEnemyMoves((prev) => [...prev, move]);
+      };
+
+      return (
+        <div class="bg-gray-700 p-4 rounded-lg shadow-lg">
+          <h3 class="text-lg font-bold mb-2">{team} Radio Operator</h3>
+          <div class="bg-gray-800 p-2 rounded mb-2 h-40 overflow-y-auto">
+            {enemyMoves.map((move, index) => (
+              <p key={index} class="text-sm">{move}</p>
+            ))}
+          </div>
+          <div class="flex space-x-2">
+            <button onClick={() => addMove('North')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">N</button>
+            <button onClick={() => addMove('South')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">S</button>
+            <button onClick={() => addMove('East')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">E</button>
+            <button onClick={() => addMove('West')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">W</button>
+          </div>
+        </div>
+      );
+    };
+
+    // Team Dashboard
+    const TeamDashboard = ({ team }) => {
+      return (
+        <div class="p-6 bg-gray-800 min-h-screen">
+          <h1 class="text-2xl font-bold mb-4">{team} Dashboard</h1>
+          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <CaptainInterface team={team} />
+            <FirstMateInterface team={team} />
+            <EngineerInterface team={team} />
+            <RadioOperatorInterface team={team} />
+          </div>
+          <div class="mt-6">
+            <ChatBox />
+          </div>
+        </div>
+      );
+    };
+
+    // Main App
+    const App = () => {
+      return (
+        <div class="flex flex-col md:flex-row">
+          <div class="flex-1">
+            <TeamDashboard team="Team A" />
+          </div>
+          <div class="flex-1">
+            <TeamDashboard team="Team B" />
+          </div>
+        </div>
+      );
+    };
+
+    // Render the app
+    ReactDOM.render(<App />, document.getElementById('root'));
   </script>
 </body>
 </html>

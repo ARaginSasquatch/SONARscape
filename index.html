@@ -48,6 +48,13 @@
         }
       };
 
+      const resetOverlay = () => {
+        setOverlayPos({ x: 300, y: 0 }); // Reset to initial position (right of map)
+        setCurrentPos({ x: 7, y: 7 }); // Reset to center of map
+        setMarkedTiles([{ x: 7, y: 7 }]); // Reset to initial position only
+        setEnemyMoves([]); // Clear move list
+      };
+
       const handleMouseDown = () => {
         setIsDragging(true);
       };
@@ -171,6 +178,9 @@
               <button onClick={() => addMove('South')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">S</button>
               <div></div>
             </div>
+          </div>
+          <div className="flex justify-center">
+            <button onClick={resetOverlay} className="p-2 bg-blue-600 rounded hover:bg-blue-700">Reset</button>
           </div>
         </div>
       );

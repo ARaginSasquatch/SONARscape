@@ -1,43 +1,4 @@
-<script type="text/javascript">
-        var gk_isXlsx = false;
-        var gk_xlsxFileLookup = {};
-        var gk_fileData = {};
-        function filledCell(cell) {
-          return cell !== '' && cell != null;
-        }
-        function loadFileData(filename) {
-        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
-            try {
-                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
-                var firstSheetName = workbook.SheetNames[0];
-                var worksheet = workbook.Sheets[firstSheetName];
-
-                // Convert sheet to JSON to filter blank rows
-                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
-                // Filter out blank rows (rows where all cells are empty, null, or undefined)
-                var filteredData = jsonData.filter(row => row.some(filledCell));
-
-                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
-                var headerRowIndex = filteredData.findIndex((row, index) =>
-                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
-                );
-                // Fallback
-                if (headerRowIndex === -1 || headerRowIndex > 25) {
-                  headerRowIndex = 0;
-                }
-
-                // Convert filtered JSON back to CSV
-                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
-                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
-                return csv;
-            } catch (e) {
-                console.error(e);
-                return "";
-            }
-        }
-        return gk_fileData[filename] || "";
-        }
-        </script><!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
@@ -45,7 +6,7 @@
   <title>SONARScape Role Interface</title>
   <script src="https://cdn.jsdelivr.net/npm/react@18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/react-dom@18.2.0/umd/react-dom.production.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/babel-standalone@7.22.9/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@babel/standalone@7.22.9/babel.min.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-100 font-sans">
@@ -140,6 +101,81 @@
         setState(prev => ({ ...prev, messages: [...prev.messages, { team, role, playerId, message, time: new Date().toLocaleTimeString() }] }));
       };
 
+      // Role Selector
+      const RoleSelector = () => (
+        <div className="p-4 bg-white rounded shadow mb-4">
+          <h2 className="text-xl font-bold mb-2">Select Role</h2>
+          <div className="flex space-x-4">
+            <select className="p-2 border rounded" value={team} onChange={(e) => setTeam(e.target.value)}>
+              <option>Trident</option>
+              <option>Harpoon</option>
+            </select>
+            <select className="p-2 border rounded" value={role} onChange={(e) => setRole(e.target.value)}>
+              <option>Captain</option>
+              <option>Weapons</option>
+              <option>Detection</option>
+              <option>Engineer</option>
+              <option>Navigator</option>
+            </select>
+            <input
+              type="text"
+              className="p-2 border rounded"
+              value={playerId}
+              onChange={(e) => setPlayerId(e.target.value)}
+              placeholder="Enter Player ID"
+            />
+            <label className="flex items-center">
+              <input type="checkbox" checked={isLeader} onChange={(e) => setIsLeader(e.target.checked)} className="mr-2" />
+              Is Leader?
+            </label>
+          </div>
+        </div>
+      );
+
+      // Timer Display
+      const TimerDisplay = () => (
+        <div className="p-4 bg-white rounded shadow mb-4">
+          <h2 className="text-xl font-bold">Timer</h2>
+          <p>{state.timer.phase}: {state.timer.minutes}:{state.timer.seconds < 10 ? '0' : ''}{state.timer.seconds}</p>
+        </div>
+      );
+
+      // Chat Box
+      const ChatBox = () => (
+        <div className="p-4 bg-white rounded shadow mb-4">
+          <h2 className="text-xl font-bold mb-2">Chat</h2>
+          <div className="h-40 overflow-y-scroll border p-2 mb-2">
+            {state.messages.map((msg, idx) => (
+              <p key={idx}>{msg.time} [{msg.team} {msg.role} {msg.playerId}]: {msg.message}</p>
+            ))}
+          </div>
+          <input
+            type="text"
+            className="p-2 border rounded w-full"
+            placeholder="Type message..."
+            onKeyPress={(e) => {
+              if (e.key === 'Enter' && e.target.value) {
+                addMessage(e.target.value);
+                e.target.value = '';
+              }
+            }}
+          />
+        </div>
+      );
+
+      // Scoreboard
+      const Scoreboard = () => (
+        <div className="p-4 bg-white rounded shadow mb-4">
+          <h2 className="text-xl font-bold mb-2">Scoreboard</h2>
+          <p>{team} Points: {state.teams[team].points}</p>
+          <p>Tiles Cleared: {state.teams[team].tilesCleared}</p>
+          <h3 className="font-semibold mt-2">Player Scores</h3>
+          {Object.entries(state.players).map(([id, data]) => (
+            <p key={id}>{id}: {data.points} points</p>
+          ))}
+        </div>
+      );
+
       // Captain Dashboard
       function CaptainDashboard() {
         const move = (direction) => {
@@ -152,11 +188,11 @@
           if (direction === 'E' && col !== 5) newTile = row + (col + 1);
           if (direction === 'W' && col !== 1) newTile = row + (col - 1);
           if (!newTile || tiles[newTile].status === 'Cleared') return;
-          
+
           let xpCost = 20000;
           const lastMove = state.teams[team].lastMove;
-          if (lastMove === direction) xpCost += 5000;
-          
+          if (lastMove === direction) xpCost -= 5000; // Bonus for same direction
+
           if (state.teams[team].xp >= xpCost) {
             const otherTeam = team === 'Trident' ? 'Harpoon' : 'Trident';
             if (state.teams[otherTeam].position === newTile) {
@@ -167,10 +203,18 @@
               ...prev,
               teams: {
                 ...prev.teams,
-                [team]: { ...prev.teams[team], position: newTile, xp: prev.teams[team].xp - xpCost, lastMove: direction }
+                [team]: {
+                  ...prev.teams[team],
+                  position: newTile,
+                  xp: prev.teams[team].xp - xpCost,
+                  lastMove: direction,
+                  lastPosition: currentTile
+                }
               }
             }));
             addMessage(`Moved to ${tiles[newTile].name} (${xpCost} XP)`);
+          } else {
+            addMessage('Not enough XP to move!');
           }
         };
 
@@ -221,7 +265,6 @@
                     <div
                       key={tile}
                       className={`p-2 text-center border ${isCurrent ? 'bg-blue-500 text-white' : isCleared ? 'bg-green-500' : 'bg-gray-200'} ${tiles[tile] ? 'cursor-pointer' : ''}`}
-                      onClick={() => isLeader && move(tile)}
                     >
                       {tiles[tile]?.name || ''}
                     </div>
@@ -257,7 +300,7 @@
       function WeaponsOfficerDashboard() {
         const assignTask = (task, member) => {
           if (!isLeader || state.timer.phase !== 'Planning') return;
-          if (state.tasks.filter(t => t.team === team && t.tile === task.tile).length >= task.cap) {
+          if (state.tasks.filter(t => t.team === team && t.tile === task.tile && t.role === 'Weapons').length >= task.cap) {
             addMessage(`Task cap reached for ${task.tile}`);
             return;
           }
@@ -269,7 +312,7 @@
         };
 
         const completeTask = (task) => {
-          if (isLeader || state.timer.phase !== 'Execution') return;
+          if (isLeader || state.timer.phase !== 'Execution' || task.member !== playerId) return;
           setState(prev => {
             const newTasks = prev.tasks.map(t => t.task === task.task && t.member === playerId ? { ...t, status: 'Completed' } : t);
             const teamState = prev.teams[team];
@@ -278,6 +321,7 @@
             const newXP = teamState.xp + task.xp;
             const tilePoints = newTasks.filter(t => t.team === team && t.tile === task.tile && t.status === 'Completed').reduce((sum, t) => sum + t.points, 0);
             const tilesCleared = tilePoints >= tiles[task.tile].points ? teamState.tilesCleared + 1 : teamState.tilesCleared;
+            const newTileStatus = tilePoints >= tiles[task.tile].points ? { ...tiles, [task.tile]: { ...tiles[task.tile], status: 'Cleared' } } : tiles;
             return {
               ...prev,
               tasks: newTasks,
@@ -355,19 +399,19 @@
       function DetectionOfficerDashboard() {
         const assignTask = (task, member) => {
           if (!isLeader || state.timer.phase !== 'Planning') return;
-          if (state.tasks.filter(t => t.team === team && t.tile === task.tile).length >= task.cap) {
+          if (state.tasks.filter(t => t.team === team && t.tile === task.tile && t.role === 'Detection').length >= task.cap) {
             addMessage(`Task cap reached for ${task.tile}`);
             return;
           }
           setState(prev => ({
             ...prev,
-            tasks: [...prev.tasks, { team, role: 'Detection', tile: task.tile, task: 'task.task', points: task.points, xp: task.xp, member, status: 'Assigned' }]
+            tasks: [...prev.tasks, { team, role: 'Detection', tile: task.tile, task: task.task, points: task.points, xp: task.xp, member, status: 'Assigned' }]
           }));
           addMessage(`Assigned ${task.task} to ${member}`);
         };
 
         const completeTask = (task) => {
-          if (isLeader || state.timer.phase !== 'Execution') return;
+          if (isLeader || state.timer.phase !== 'Execution' || task.member !== playerId) return;
           setState(prev => {
             const newTasks = prev.tasks.map(t => t.task === task.task && t.member === playerId ? { ...t, status: 'Completed' } : t);
             const teamState = prev.teams[team];
@@ -376,6 +420,7 @@
             const newXP = teamState.xp + task.xp;
             const tilePoints = newTasks.filter(t => t.team === team && t.tile === task.tile && t.status === 'Completed').reduce((sum, t) => sum + t.points, 0);
             const tilesCleared = tilePoints >= tiles[task.tile].points ? teamState.tilesCleared + 1 : teamState.tilesCleared;
+            const newTileStatus = tilePoints >= tiles[task.tile].points ? { ...tiles, [task.tile]: { ...tiles[task.tile], status: 'Cleared' } } : tiles;
             return {
               ...prev,
               tasks: newTasks,
@@ -404,7 +449,9 @@
                 [team]: { ...prev.teams[team], xp: prev.teams[team].xp - scanCost }
               }
             }));
-            addMessage(`Scanned ${otherTeam} at ${tiles[prev.teams[otherTeam].position].name}`);
+            addMessage(`Scanned ${otherTeam} at ${tiles[state.teams[otherTeam].position].name}`);
+          } else {
+            addMessage('Not enough XP to scan!');
           }
         };
 
@@ -473,4 +520,135 @@
           setState(prev => {
             const newHealth = Math.max(0, prev.teams[team].health - 1);
             let newTeams = { ...prev.teams, [team]: { ...prev.teams[team], health: newHealth } };
-            if (newHealth
+            if (newHealth === 0) {
+              newTeams[team] = {
+                ...newTeams[team],
+                health: 15,
+                weaponsLevel: 0,
+                detectionLevel: 0,
+                stealthLevel: 0,
+                stealthPoints: 0
+              };
+              addMessage(`${team} repaired: Health 15, systems reset.`);
+            } else {
+              addMessage(`Penalty logged: ${team} health -1`);
+            }
+            return { ...prev, teams: newTeams };
+          });
+        };
+
+        const suggestPenalty = () => {
+          if (isLeader) return;
+          addMessage(`Suggested penalty for ${team}`);
+        };
+
+        return (
+          <div className="p-4 bg-white rounded shadow">
+            <h2 className="text-xl font-bold mb-4">Engineers Dashboard</h2>
+            <table className="w-full mb-4 border">
+              <thead>
+                <tr className="bg-gray-200">
+                  <th className="p-2">Health</th>
+                  <th className="p-2">Weapons Level</th>
+                  <th className="p-2">Detection Level</th>
+                  <th className="p-2">Stealth Level</th>
+                  <th className="p-2">XP Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="p-2">{state.teams[team].health}</td>
+                  <td className="p-2">{state.teams[team].weaponsLevel}</td>
+                  <td className="p-2">{state.teams[team].detectionLevel}</td>
+                  <td className="p-2">{state.teams[team].stealthLevel}</td>
+                  <td className="p-2">{state.teams[team].xp}</td>
+                </tr>
+              </tbody>
+            </table>
+            {isLeader && (
+              <button className="px-4 py-2 bg-red-500 text-white rounded" onClick={logPenalty}>Log Penalty</button>
+            )}
+            {!isLeader && (
+              <button className="px-4 py-2 bg-gray-500 text-white rounded" onClick={suggestPenalty}>Suggest Penalty</button>
+            )}
+          </div>
+        );
+      }
+
+      // Navigator Dashboard
+      function NavigatorDashboard() {
+        const spendStealthPoint = () => {
+          if (!isLeader || state.timer.phase !== 'Execution' || state.teams[team].stealthPoints === 0) return;
+          setState(prev => ({
+            ...prev,
+            teams: {
+              ...prev.teams,
+              [team]: { ...prev.teams[team], stealthPoints: prev.teams[team].stealthPoints - 1 }
+            }
+          }));
+          addMessage(`Spent 1 stealth point. Scan cost reduced.`);
+        };
+
+        const suggestUsage = () => {
+          if (isLeader) return;
+          addMessage(`Suggested stealth point usage for ${team}`);
+        };
+
+        const activateStealth = () => {
+          if (!isLeader || state.timer.phase !== 'Execution') return;
+          addMessage('Stealth System Activated');
+        };
+
+        return (
+          <div className="p-4 bg-white rounded shadow">
+            <h2 className="text-xl font-bold mb-4">Navigators Dashboard</h2>
+            <p>Stealth Points: {state.teams[team].stealthPoints}</p>
+            <p>Scan Cost Reduction: {state.teams[team].stealthLevel >= 8 ? 5000 : state.teams[team].stealthLevel >= 5 ? 3000 : 0} XP</p>
+            {isLeader && (
+              <>
+                <button className="px-4 py-2 bg-blue-500 text-white rounded mt-2" onClick={spendStealthPoint}>Spend Stealth Point</button>
+                <button className="px-4 py-2 bg-blue-500 text-white rounded mt-2" onClick={activateStealth}>Activate Stealth</button>
+              </>
+            )}
+            {!isLeader && (
+              <button className="px-4 py-2 bg-gray-500 text-white rounded mt-2" onClick={suggestUsage}>Suggest Usage</button>
+            )}
+          </div>
+        );
+      }
+
+      // Render Role Dashboard
+      const renderDashboard = () => {
+        switch (role) {
+          case 'Captain': return <CaptainDashboard />;
+          case 'Weapons': return <WeaponsOfficerDashboard />;
+          case 'Detection': return <DetectionOfficerDashboard />;
+          case 'Engineer': return <EngineerDashboard />;
+          case 'Navigator': return <NavigatorDashboard />;
+          default: return null;
+        }
+      };
+
+      console.log('Rendering App...'); // Debug log
+
+      return (
+        <div className="container mx-auto p-4">
+          <h1 className="text-3xl font-bold mb-4">SONARScape Role Interface</h1>
+          <RoleSelector />
+          <TimerDisplay />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>{renderDashboard()}</div>
+            <div>
+              <ChatBox />
+              <Scoreboard />
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    // Render App
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
+</body>
+</html>

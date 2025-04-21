@@ -12,13 +12,13 @@
 <body class="bg-gray-800 text-white">
   <div id="root"></div>
   <script type="text/babel">
-    const { useState, useEffect } = React;
+    const { useState, useEffect, useRef } = React;
 
     // Shared chat state
     const initialChatMessages = [];
     let sharedChatMessages = initialChatMessages;
 
-    // ChatBox component (shared between teams)
+    // ChatBox component
     const ChatBox = () => {
       const [message, setMessage] = useState('');
       const [messages, setMessages] = useState(sharedChatMessages);
@@ -62,198 +62,72 @@
       );
     };
 
-    // Captain Interface (8x8 grid for movement and actions)
-    const CaptainInterface = ({ team }) => {
-      const [position, setPosition] = useState({ x: 4, y: 4 });
-      const gridSize = 8;
+    // Captain Interface
+    const CaptainInterface = ({ team, gameState, updateGameState }) => {
+      const gridSize = 15;
+      const islands = [
+        { x: 3, y: 3 }, { x: 3, y: 11 }, { x: 11, y: 3 }, { x: 11, y: 11 }
+      ];
+
+      const getSector = (x, y) => {
+        const sectorX = Math.floor(x / 5);
+        const sectorY = Math.floor(y / 5);
+        return sectorY * 3 + sectorX + 1;
+      };
+
+      const isValidMove = (x, y) => {
+        return (
+          x >= 0 &&
+          x < gridSize &&
+          y >= 0 &&
+          y < gridSize &&
+          !islands.some((i) => i.x === x && i.y === y) &&
+          !gameState.path.some((p) => p.x === x && p.y === y)
+        );
+      };
 
       const move = (direction) => {
-        setPosition((prev) => {
-          let newX = prev.x;
-          let newY = prev.y;
-          if (direction === 'N' && prev.y > 0) newY--;
-          if (direction === 'S' && prev.y < gridSize - 1) newY++;
-          if (direction === 'E' && prev.x < gridSize - 1) newX++;
-          if (direction === 'W' && prev.x > 0) newX--;
-          return { x: newX, y: newY };
-        });
-      };
-
-      const renderGrid = () => {
-        const grid = [];
-        for (let y = 0; y < gridSize; y++) {
-          const row = [];
-          for (let x = 0; x < gridSize; x++) {
-            const isSub = x === position.x && y === position.y;
-            row.push(
-              <div
-                key={`${x}-${y}`}
-                class={`w-8 h-8 border border-gray-500 flex items-center justify-center ${
-                  isSub ? 'bg-blue-600' : 'bg-gray-900'
-                }`}
-              >
-                {isSub ? '🚢' : ''}
-              </div>
-            );
-          }
-          grid.push(<div key={y} class="flex">{row}</div>);
+        if (gameState.isSurfacing) {
+          alert('Cannot move while surfacing!');
+          return;
         }
-        return grid;
+        const { x, y } = gameState.position;
+        let newX = x;
+        let newY = y;
+        if (direction === 'N') newY--;
+        else if (direction === 'S') newY++;
+        else if (direction === 'E') newX++;
+        else if (direction === 'W') newX--;
+
+        if (isValidMove(newX, newY)) {
+          const newPosition = { x: newX, y: newY };
+          updateGameState({
+            position: newPosition,
+            path: [...gameState.path, newPosition],
+            sector: getSector(newX, newY)
+          });
+          alert(`${team} moved ${direction}!`);
+        } else {
+          alert('Invalid move: Blocked by path or island!');
+        }
       };
 
-      return (
-        <div class="bg-gray-700 p-4 rounded-lg shadow-lg">
-          <h3 class="text-lg font-bold mb-2">{team} Captain</h3>
-          <div class="mb-4">{renderGrid()}</div>
-          <div class="flex space-x-2">
-            <button onClick={() => move('N')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">North</button>
-            <button onClick={() => move('S')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">South</button>
-            <button onClick={() => move('E')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">East</button>
-            <button onClick={() => move('W')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">West</button>
-            <button class="p-2 bg-red-600 rounded hover:bg-red-700">Torpedo</button>
-            <button class="p-2 bg-yellow-600 rounded hover:bg-yellow-700">Drone</button>
-          </div>
-        </div>
-      );
-    };
-
-    // First Mate Interface (weapon/system trackers)
-    const FirstMateInterface = ({ team }) => {
-      const [systems, setSystems] = useState({
-        torpedo: 0,
-        drone: 0,
-        sonar: 0,
-      });
-
-      const incrementSystem = (system) => {
-        setSystems((prev) => ({
-          ...prev,
-          [system]: Math.min(prev[system] + 1, 3),
-        }));
+      const surface = () => {
+        if (gameState.isSurfacing) {
+          alert('Already surfacing!');
+          return;
+        }
+        if (Object.values(gameState.breakdowns).some((b) => b)) {
+          alert('Cannot surface: Engineer must repair all breakdowns!');
+          return;
+        }
+        updateGameState({ isSurfacing: true });
+        alert(`${team} is surfacing!`);
       };
 
-      return (
-        <div class="bg-gray-700 p-4 rounded-lg shadow-lg">
-          <h3 class="text-lg font-bold mb-2">{team} First Mate</h3>
-          <div class="space-y-2">
-            {Object.keys(systems).map((system) => (
-              <div key={system} class="flex items-center">
-                <span class="w-24 capitalize">{system}</span>
-                <div class="flex-1 h-4 bg-gray-600 rounded">
-                  <div
-                    class={`h-full bg-green-600 rounded`}
-                    style={{ width: `${(systems[system] / 3) * 100}%` }}
-                  ></div>
-                </div>
-                <button
-                  onClick={() => incrementSystem(system)}
-                  class="ml-2 p-1 bg-blue-600 rounded hover:bg-blue-700"
-                >
-                  +
-                </button>
-              </div>
-            ))}
-          </div>
-        </div>
-      );
-    };
-
-    // Engineer Interface (system damage/repair checkboxes)
-    const EngineerInterface = ({ team }) => {
-      const [systems, setSystems] = useState({
-        reactor: false,
-        weapons: false,
-        engines: false,
-        systems: false,
-      });
-
-      const toggleSystem = (system) => {
-        setSystems((prev) => ({
-          ...prev,
-          [system]: !prev[system],
-        }));
-      };
-
-      return (
-        <div class="bg-gray-700 p-4 rounded-lg shadow-lg">
-          <h3 class="text-lg font-bold mb-2">{team} Engineer</h3>
-          <div class="grid grid-cols-2 gap-2">
-            {Object.keys(systems).map((system) => (
-              <label key={system} class="flex items-center">
-                <input
-                  type="checkbox"
-                  checked={systems[system]}
-                  onChange={() => toggleSystem(system)}
-                  class="mr-2"
-                />
-                <span class="capitalize">{system}</span>
-              </label>
-            ))}
-          </div>
-        </div>
-      );
-    };
-
-    // Radio Operator Interface (tracking enemy movements)
-    const RadioOperatorInterface = ({ team }) => {
-      const [enemyMoves, setEnemyMoves] = useState([]);
-
-      const addMove = (move) => {
-        setEnemyMoves((prev) => [...prev, move]);
-      };
-
-      return (
-        <div class="bg-gray-700 p-4 rounded-lg shadow-lg">
-          <h3 class="text-lg font-bold mb-2">{team} Radio Operator</h3>
-          <div class="bg-gray-800 p-2 rounded mb-2 h-40 overflow-y-auto">
-            {enemyMoves.map((move, index) => (
-              <p key={index} class="text-sm">{move}</p>
-            ))}
-          </div>
-          <div class="flex space-x-2">
-            <button onClick={() => addMove('North')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">N</button>
-            <button onClick={() => addMove('South')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">S</button>
-            <button onClick={() => addMove('East')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">E</button>
-            <button onClick={() => addMove('West')} class="p-2 bg-blue-600 rounded hover:bg-blue-700">W</button>
-          </div>
-        </div>
-      );
-    };
-
-    // Team Dashboard
-    const TeamDashboard = ({ team }) => {
-      return (
-        <div class="p-6 bg-gray-800 min-h-screen">
-          <h1 class="text-2xl font-bold mb-4">{team} Dashboard</h1>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <CaptainInterface team={team} />
-            <FirstMateInterface team={team} />
-            <EngineerInterface team={team} />
-            <RadioOperatorInterface team={team} />
-          </div>
-          <div class="mt-6">
-            <ChatBox />
-          </div>
-        </div>
-      );
-    };
-
-    // Main App
-    const App = () => {
-      return (
-        <div class="flex flex-col md:flex-row">
-          <div class="flex-1">
-            <TeamDashboard team="Team A" />
-          </div>
-          <div class="flex-1">
-            <TeamDashboard team="Team B" />
-          </div>
-        </div>
-      );
-    };
-
-    // Render the app
-    ReactDOM.render(<App />, document.getElementById('root'));
-  </script>
-</body>
-</html>
+      const completeSurfacing = () => {
+        updateGameState({
+          path: [gameState.position],
+          isSurfacing: false,
+          breakdowns: {
+            north: idiom: I'm all ears! If you've got any tweaks, specific rulebook pages, or extra features (like damage tracking or fancier visuals), just let me know, and I'll dive right in. What's next?

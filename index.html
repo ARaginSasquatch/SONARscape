@@ -22,7 +22,7 @@
     // Radio Operator Interface
     const RadioOperatorInterface = () => {
       const gridSize = 15;
-      const [overlayPos, setOverlayPos] = useState({ x: 450, y: 0 }); // Start to the right of the larger map
+      const [overlayPos, setOverlayPos] = useState({ x: 450, y: 0 }); // Start to the right of the map
       const [isDragging, setIsDragging] = useState(false);
       const [currentPos, setCurrentPos] = useState({ x: 7, y: 7 });
       const [markedTiles, setMarkedTiles] = useState([{ x: 7, y: 7 }]);
@@ -49,7 +49,7 @@
       };
 
       const resetOverlay = () => {
-        setOverlayPos({ x: 450, y: 0 }); // Reset to initial position (right of larger map)
+        setOverlayPos({ x: 450, y: 0 }); // Reset to initial position (right of map)
         setCurrentPos({ x: 7, y: 7 }); // Reset to center of map
         setMarkedTiles([{ x: 7, y: 7 }]); // Reset to initial position only
         setEnemyMoves([]); // Clear move list
@@ -147,16 +147,20 @@
       return (
         <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
           <h3 className="text-lg font-bold mb-2">Radio Operator</h3>
-          <div className="relative mb-4 mx-auto" style={{ width: '450px', height: '450px', marginLeft: '-150px' }}>
-            <div className="absolute">{renderMap()}</div>
-            <div
-              className="absolute"
-              style={{ transform: `translate(${overlayPos.x}px, ${overlayPos.y}px)`, cursor: isDragging ? 'grabbing' : 'grab' }}
-              onMouseDown={handleMouseDown}
-              onMouseUp={handleMouseUp}
-              onMouseMove={handleMouseMove}
-            >
-              {renderOverlay()}
+          <div className="relative mb-4 w-[900px] mx-auto">
+            <div className="flex justify-start">
+              <div className="relative" style={{ width: '450px', height: '450px' }}>
+                <div className="absolute">{renderMap()}</div>
+                <div
+                  className="absolute"
+                  style={{ transform: `translate(${overlayPos.x}px, ${overlayPos.y}px)`, cursor: isDragging ? 'grabbing' : 'grab' }}
+                  onMouseDown={handleMouseDown}
+                  onMouseUp={handleMouseUp}
+                  onMouseMove={handleMouseMove}
+                >
+                  {renderOverlay()}
+                </div>
+              </div>
             </div>
           </div>
           <div className="bg-gray-800 p-2 rounded h-40 overflow-y-auto mb-2 w-[900px] mx-auto">
@@ -166,7 +170,7 @@
               </p>
             ))}
           </div>
-          <div className="flex justify-center items-center gap-[30px] mb-2">
+          <div className="flex justify-center items-center gap-[40px] mb-2">
             <div className="grid grid-cols-3 gap-1 w-28">
               <div></div>
               <button onClick={() => addMove('North')} className="p-2 bg-blue-600 rounded-sm hover:bg-blue-700">N</button>

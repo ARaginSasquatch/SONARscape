@@ -22,7 +22,7 @@
     // Radio Operator Interface
     const RadioOperatorInterface = () => {
       const gridSize = 15;
-      const [overlayPos, setOverlayPos] = useState({ x: 300, y: 0 }); // Start to the right of the map
+      const [overlayPos, setOverlayPos] = useState({ x: 450, y: 0 }); // Start to the right of the larger map
       const [isDragging, setIsDragging] = useState(false);
       const [currentPos, setCurrentPos] = useState({ x: 7, y: 7 });
       const [markedTiles, setMarkedTiles] = useState([{ x: 7, y: 7 }]);
@@ -49,7 +49,7 @@
       };
 
       const resetOverlay = () => {
-        setOverlayPos({ x: 300, y: 0 }); // Reset to initial position (right of map)
+        setOverlayPos({ x: 450, y: 0 }); // Reset to initial position (right of larger map)
         setCurrentPos({ x: 7, y: 7 }); // Reset to center of map
         setMarkedTiles([{ x: 7, y: 7 }]); // Reset to initial position only
         setEnemyMoves([]); // Clear move list
@@ -101,7 +101,7 @@
             row.push(
               <div
                 key={`${x}-${y}`}
-                className={`w-5 h-5 flex items-center justify-center text-xs border border-gray-600 border-opacity-50 ${thickLeft} ${thickRight} ${thickTop} ${thickBottom} ${
+                className={`w-[30px] h-[30px] flex items-center justify-center text-xs border border-gray-600 border-opacity-50 ${thickLeft} ${thickRight} ${thickTop} ${thickBottom} ${
                   isOrigin ? 'bg-purple-600' : isIsland ? 'bg-green-600' : 'bg-blue-200'
                 }`}
               >
@@ -119,7 +119,7 @@
         for (let y = 0; y < gridSize; y++) {
           const row = [];
           for (let x = 0; x < gridSize; x++) {
-            const isMarked = markedTiles.some(m => m.x === x && m.y === y);
+            const isMarked = markedTiles.some(m => m.x === x && m.y === y); // Fixed typo: i.y to m.y
             const isCurrent = x === currentPos.x && y === currentPos.y;
 
             // Determine thicker borders for sector boundaries
@@ -131,7 +131,7 @@
             row.push(
               <div
                 key={`${x}-${y}`}
-                className={`w-5 h-5 border border-gray-500 border-opacity-50 ${thickLeft} ${thickRight} ${thickTop} ${thickBottom} ${
+                className={`w-[30px] h-[30px] border border-gray-500 border-opacity-50 ${thickLeft} ${thickRight} ${thickTop} ${thickBottom} ${
                   isCurrent ? 'bg-yellow-600' : isMarked ? 'bg-yellow-400' : 'bg-transparent'
                 } opacity-50 flex items-center justify-center`}
               >
@@ -147,7 +147,7 @@
       return (
         <div className="bg-gray-700 p-4 rounded-lg shadow-lg">
           <h3 className="text-lg font-bold mb-2">Radio Operator</h3>
-          <div className="relative mb-4" style={{ width: '300px', height: '300px' }}>
+          <div className="relative mb-4 mx-auto" style={{ width: '450px', height: '450px' }}>
             <div className="absolute">{renderMap()}</div>
             <div
               className="absolute"
@@ -159,28 +159,26 @@
               {renderOverlay()}
             </div>
           </div>
-          <div className="bg-gray-800 p-2 rounded h-40 overflow-y-auto mb-2">
+          <div className="bg-gray-800 p-2 rounded h-40 overflow-y-auto mb-2 w-4/5 mx-auto">
             {enemyMoves.map((entry, index) => (
               <p key={index} className="text-sm">
                 {entry.move} - {entry.timestamp}
               </p>
             ))}
           </div>
-          <div className="mb-2">
-            <div className="grid grid-cols-3 gap-1 w-24 mx-auto">
+          <div className="flex justify-center items-center gap-6 mb-2">
+            <div className="grid grid-cols-3 gap-1 w-28">
               <div></div>
-              <button onClick={() => addMove('North')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">N</button>
+              <button onClick={() => addMove('North')} className="p-2 bg-blue-600 rounded-sm hover:bg-blue-700">N</button>
               <div></div>
-              <button onClick={() => addMove('West')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">W</button>
+              <button onClick={() => addMove('West')} className="p-2 bg-blue-600 rounded-sm hover:bg-blue-700">W</button>
               <div></div>
-              <button onClick={() => addMove('East')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">E</button>
+              <button onClick={() => addMove('East')} className="p-2 bg-blue-600 rounded-sm hover:bg-blue-700">E</button>
               <div></div>
-              <button onClick={() => addMove('South')} className="p-2 bg-blue-600 rounded hover:bg-blue-700">S</button>
+              <button onClick={() => addMove('South')} className="p-2 bg-blue-600 rounded-sm hover:bg-blue-700">S</button>
               <div></div>
             </div>
-          </div>
-          <div className="flex justify-center">
-            <button onClick={resetOverlay} className="p-2 bg-blue-600 rounded hover:bg-blue-700">Reset</button>
+            <button onClick={resetOverlay} className="p-2 bg-red-600 rounded hover:bg-red-700">Reset</button>
           </div>
         </div>
       );
